@@ -412,7 +412,6 @@ window.addEventListener('load', () => {
         '• **Opzioni di alloggio**\n' +
         '• **Date e disponibilità**\n' +
         '• **Transfer aeroportuali**\n\n' +
-        '💡 **Novità**: Puoi caricare documenti PDF usando l\'area in alto!\n\n' +
         '*Cosa vorresti sapere?*'
     );
     
