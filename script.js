@@ -2,20 +2,17 @@
 
 // ===== CONFIGURAZIONE IMPORTANTE =====
 // CAMBIA QUESTO CON L'URL DEL TUO BACKEND PYTHON!
-const API_URL = 'https://chatbot-corsi.onrender.com';  // Esempi:
-// const API_URL = 'https://my-chatbot-api.onrender.com';
-// const API_URL = 'https://chatbot-backend.herokuapp.com';
-// const API_URL = 'https://chatbot-api.up.railway.app';
+const API_URL = 'https://chatbot-corsi.onrender.com';
 
 // ===== FINE CONFIGURAZIONE =====
 
 // Configura marked.js per il rendering del markdown
 if (typeof marked !== 'undefined') {
     marked.setOptions({
-        breaks: true,  // Converte i newline in <br>
-        gfm: true,     // GitHub Flavored Markdown
-        headerIds: false,  // Disabilita gli ID automatici negli header
-        mangle: false  // Non oscura gli indirizzi email
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
     });
 }
 
@@ -28,6 +25,22 @@ const chatContainer = document.getElementById('chatContainer');
 const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const timeElement = document.getElementById('time');
+
+// Elementi Upload
+const uploadSection = document.getElementById('uploadSection');
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const folderInput = document.getElementById('folderInput');
+const browseButton = document.getElementById('browseButton');
+const filesPreview = document.getElementById('filesPreview');
+const filesList = document.getElementById('filesList');
+const clearFilesBtn = document.getElementById('clearFilesBtn');
+const uploadBtn = document.getElementById('uploadBtn');
+const toggleUploadBtn = document.getElementById('toggleUploadBtn');
+const uploadToggleButton = document.getElementById('uploadToggleButton');
+
+// Variabili per gestione file
+let selectedFiles = new Map(); // Map per evitare duplicati
 
 // Aggiorna ora ogni secondo
 function updateTime() {
@@ -45,6 +58,249 @@ function generateSessionId() {
     return 'session-' + Math.random().toString(36).substr(2, 9);
 }
 
+// ===== GESTIONE DRAG & DROP =====
+
+// Previeni comportamento default del browser per drag & drop
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, preventDefaults, false);
+    document.body.addEventListener(eventName, preventDefaults, false);
+});
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
+
+// Highlight dell'area durante il drag
+['dragenter', 'dragover'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, highlight, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+    uploadArea.addEventListener(eventName, unhighlight, false);
+});
+
+function highlight(e) {
+    uploadArea.classList.add('drag-over');
+}
+
+function unhighlight(e) {
+    uploadArea.classList.remove('drag-over');
+}
+
+// Gestione drop dei file
+uploadArea.addEventListener('drop', handleDrop, false);
+
+function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const items = dt.items;
+    
+    if (items) {
+        // Usa DataTransferItemList per supportare cartelle
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file') {
+                const entry = item.webkitGetAsEntry();
+                if (entry) {
+                    traverseFileTree(entry);
+                }
+            }
+        }
+    } else {
+        // Fallback per browser che non supportano entries
+        const files = dt.files;
+        handleFiles(files);
+    }
+}
+
+// Attraversa ricorsivamente le cartelle
+function traverseFileTree(item, path = "") {
+    if (item.isFile) {
+        item.file(file => {
+            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                addFile(file, path);
+            }
+        });
+    } else if (item.isDirectory) {
+        const dirReader = item.createReader();
+        dirReader.readEntries(entries => {
+            for (let i = 0; i < entries.length; i++) {
+                traverseFileTree(entries[i], path + item.name + "/");
+            }
+        });
+    }
+}
+
+// Click sul pulsante sfoglia
+browseButton.addEventListener('click', () => {
+    // Chiedi se vuole selezionare file o cartella
+    if (confirm('Vuoi selezionare una cartella?\n\nOK = Cartella\nAnnulla = File singoli')) {
+        folderInput.click();
+    } else {
+        fileInput.click();
+    }
+});
+
+// Click sull'area di upload
+uploadArea.addEventListener('click', (e) => {
+    if (e.target === browseButton) return;
+    browseButton.click();
+});
+
+// Gestione selezione file
+fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+});
+
+// Gestione selezione cartella
+folderInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+});
+
+// Processa i file selezionati
+function handleFiles(files) {
+    Array.from(files).forEach(file => {
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+            addFile(file);
+        }
+    });
+}
+
+// Aggiungi file alla lista
+function addFile(file, path = '') {
+    const fileId = path + file.name;
+    
+    if (!selectedFiles.has(fileId)) {
+        selectedFiles.set(fileId, {
+            file: file,
+            path: path,
+            id: fileId
+        });
+        
+        updateFilesList();
+        showFilesPreview();
+    }
+}
+
+// Aggiorna visualizzazione lista file
+function updateFilesList() {
+    filesList.innerHTML = '';
+    
+    selectedFiles.forEach((fileInfo, fileId) => {
+        const fileItem = createFileItem(fileInfo);
+        filesList.appendChild(fileItem);
+    });
+    
+    // Aggiorna testo del pulsante
+    const fileCount = selectedFiles.size;
+    const btnText = uploadBtn.querySelector('.upload-btn-text');
+    btnText.textContent = `Elabora ${fileCount} ${fileCount === 1 ? 'Documento' : 'Documenti'}`;
+}
+
+// Crea elemento file
+function createFileItem(fileInfo) {
+    const div = document.createElement('div');
+    div.className = 'file-item';
+    div.dataset.fileId = fileInfo.id;
+    
+    const fileSize = formatFileSize(fileInfo.file.size);
+    const fileName = fileInfo.path ? `${fileInfo.path}${fileInfo.file.name}` : fileInfo.file.name;
+    
+    div.innerHTML = `
+        <svg class="file-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+        </svg>
+        <div class="file-info">
+            <div class="file-name">${fileName}</div>
+            <div class="file-size">${fileSize}</div>
+        </div>
+        <button class="file-remove" onclick="removeFile('${fileInfo.id}')" title="Rimuovi file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/>
+            </svg>
+        </button>
+    `;
+    
+    return div;
+}
+
+// Formatta dimensione file
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Rimuovi file dalla lista
+function removeFile(fileId) {
+    selectedFiles.delete(fileId);
+    updateFilesList();
+    
+    if (selectedFiles.size === 0) {
+        hideFilesPreview();
+    }
+}
+
+// Mostra preview file
+function showFilesPreview() {
+    filesPreview.style.display = 'block';
+}
+
+// Nascondi preview file
+function hideFilesPreview() {
+    filesPreview.style.display = 'none';
+}
+
+// Pulisci tutti i file
+clearFilesBtn.addEventListener('click', () => {
+    selectedFiles.clear();
+    updateFilesList();
+    hideFilesPreview();
+    fileInput.value = '';
+    folderInput.value = '';
+});
+
+// Gestione pulsante upload
+uploadBtn.addEventListener('click', async () => {
+    if (selectedFiles.size === 0) return;
+    
+    // Disabilita pulsante e mostra loader
+    uploadBtn.disabled = true;
+    uploadBtn.querySelector('.upload-btn-text').style.display = 'none';
+    uploadBtn.querySelector('.upload-btn-loader').style.display = 'inline-flex';
+    
+    // Simula elaborazione (per ora solo estetico)
+    addMessage('assistant', `📤 **Preparazione per l'elaborazione di ${selectedFiles.size} documenti PDF...**\n\nQuesta funzionalità sarà presto disponibile!`);
+    
+    // Dopo 3 secondi, resetta
+    setTimeout(() => {
+        uploadBtn.disabled = false;
+        uploadBtn.querySelector('.upload-btn-text').style.display = 'inline';
+        uploadBtn.querySelector('.upload-btn-loader').style.display = 'none';
+        
+        // Nascondi area upload
+        uploadSection.classList.add('collapsed');
+        
+        // Pulisci file
+        selectedFiles.clear();
+        updateFilesList();
+        hideFilesPreview();
+    }, 3000);
+});
+
+// Toggle area upload
+toggleUploadBtn.addEventListener('click', () => {
+    uploadSection.classList.toggle('collapsed');
+});
+
+uploadToggleButton.addEventListener('click', () => {
+    uploadSection.classList.toggle('collapsed');
+});
+
+// ===== FUNZIONI CHAT ORIGINALI =====
+
 // Aggiungi messaggio alla chat
 function addMessage(role, content, processInfo = null) {
     const messageDiv = document.createElement('div');
@@ -53,22 +309,17 @@ function addMessage(role, content, processInfo = null) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     
-    // Per i messaggi dell'utente, usa testo semplice
-    // Per i messaggi dell'assistente, renderizza il markdown
     if (role === 'user') {
         contentDiv.textContent = content;
     } else {
-        // Se marked.js è disponibile, usa il rendering markdown
         if (typeof marked !== 'undefined') {
             try {
                 contentDiv.innerHTML = marked.parse(content);
             } catch (e) {
                 console.error('Errore nel parsing del markdown:', e);
-                // Fallback: converti solo i newline in <br>
                 contentDiv.innerHTML = content.replace(/\n/g, '<br>');
             }
         } else {
-            // Fallback se marked.js non è caricato
             contentDiv.innerHTML = content.replace(/\n/g, '<br>');
         }
     }
@@ -76,7 +327,6 @@ function addMessage(role, content, processInfo = null) {
     messageDiv.appendChild(contentDiv);
     chatContainer.appendChild(messageDiv);
 
-    // Aggiungi info processo se presente
     if (processInfo) {
         const infoDiv = document.createElement('div');
         infoDiv.className = 'process-info';
@@ -84,7 +334,6 @@ function addMessage(role, content, processInfo = null) {
         contentDiv.appendChild(infoDiv);
     }
 
-    // Scroll automatico in basso
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
@@ -103,22 +352,17 @@ async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message) return;
 
-    // Disabilita input durante l'invio
     messageInput.value = '';
     messageInput.disabled = true;
     sendButton.disabled = true;
 
-    // Aggiungi messaggio utente alla chat
     addMessage('user', message);
 
-    // Mostra stato ricerca
     const status1 = addStatusMessage('🔍 Sto cercando informazioni rilevanti nel database');
 
     try {
-        // Attendi un attimo per effetto visivo
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        // Chiama il backend Python
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
@@ -139,35 +383,27 @@ async function sendMessage() {
 
         const data = await response.json();
 
-        // Rimuovi messaggio di stato
         status1.remove();
 
-        // Mostra quanti documenti sono stati trovati
         const chunksCount = data.sources ? data.sources.length : 0;
         const totalChunks = data.total_chunks || chunksCount;
         const status2 = addStatusMessage(`📚 Ho trovato ${totalChunks} documenti rilevanti. Sto analizzando`);
 
-        // Simula elaborazione
         await new Promise(resolve => setTimeout(resolve, 1200));
 
-        // Aggiorna stato
         status2.innerHTML = `💭 Sto generando la risposta basata sui documenti trovati<span class="loading-dots"></span>`;
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        // Rimuovi stato finale
         status2.remove();
 
-        // Aggiungi risposta del chatbot
         const processInfo = `Ho utilizzato ${totalChunks} chunks dal database per questa risposta.`;
         addMessage('assistant', data.message, processInfo);
 
     } catch (error) {
         console.error('Errore:', error);
         
-        // Rimuovi tutti i messaggi di stato
         document.querySelectorAll('.status-message').forEach(el => el.remove());
         
-        // Mostra messaggio di errore user-friendly
         let errorMessage = '❌ **Si è verificato un errore.**\n\n';
         
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
@@ -185,7 +421,6 @@ async function sendMessage() {
         
         addMessage('assistant', errorMessage);
     } finally {
-        // Riabilita input
         messageInput.disabled = false;
         sendButton.disabled = false;
         messageInput.focus();
@@ -203,7 +438,6 @@ function clearChat() {
 // Event listeners
 sendButton.addEventListener('click', sendMessage);
 
-// Permetti invio con Enter
 messageInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -213,7 +447,6 @@ messageInput.addEventListener('keypress', (e) => {
 
 // Messaggio di benvenuto all'avvio
 window.addEventListener('load', () => {
-    // Verifica se marked.js è caricato
     if (typeof marked === 'undefined') {
         console.warn('⚠️ marked.js non è caricato. Il rendering del markdown non sarà disponibile.');
     }
@@ -226,10 +459,10 @@ window.addEventListener('load', () => {
         '• **Opzioni di alloggio**\n' +
         '• **Date e disponibilità**\n' +
         '• **Transfer aeroportuali**\n\n' +
+        '💡 **Novità**: Puoi caricare documenti PDF usando l\'area in alto!\n\n' +
         '*Cosa vorresti sapere?*'
     );
     
-    // Check configurazione
     if (API_URL === 'http://localhost:8000') {
         console.warn('⚠️ Stai usando localhost. Ricorda di cambiare API_URL per la produzione!');
     }
