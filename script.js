@@ -9,6 +9,16 @@ const API_URL = 'https://chatbot-corsi.onrender.com';  // Esempi:
 
 // ===== FINE CONFIGURAZIONE =====
 
+// Configura marked.js per il rendering del markdown
+if (typeof marked !== 'undefined') {
+    marked.setOptions({
+        breaks: true,  // Converte i newline in <br>
+        gfm: true,     // GitHub Flavored Markdown
+        headerIds: false,  // Disabilita gli ID automatici negli header
+        mangle: false  // Non oscura gli indirizzi email
+    });
+}
+
 // Gestione sessione
 let sessionId = localStorage.getItem('chatSessionId') || generateSessionId();
 localStorage.setItem('chatSessionId', sessionId);
@@ -43,9 +53,25 @@ function addMessage(role, content, processInfo = null) {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     
-    // Converti newline in <br>
-    const formattedContent = content.replace(/\n/g, '<br>');
-    contentDiv.innerHTML = formattedContent;
+    // Per i messaggi dell'utente, usa testo semplice
+    // Per i messaggi dell'assistente, renderizza il markdown
+    if (role === 'user') {
+        contentDiv.textContent = content;
+    } else {
+        // Se marked.js è disponibile, usa il rendering markdown
+        if (typeof marked !== 'undefined') {
+            try {
+                contentDiv.innerHTML = marked.parse(content);
+            } catch (e) {
+                console.error('Errore nel parsing del markdown:', e);
+                // Fallback: converti solo i newline in <br>
+                contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            }
+        } else {
+            // Fallback se marked.js non è caricato
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+        }
+    }
     
     messageDiv.appendChild(contentDiv);
     chatContainer.appendChild(messageDiv);
@@ -142,12 +168,12 @@ async function sendMessage() {
         document.querySelectorAll('.status-message').forEach(el => el.remove());
         
         // Mostra messaggio di errore user-friendly
-        let errorMessage = '❌ Si è verificato un errore.\n\n';
+        let errorMessage = '❌ **Si è verificato un errore.**\n\n';
         
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
             errorMessage += 'Non riesco a connettermi al server. Verifica che:\n';
             errorMessage += '• Il backend Python sia in esecuzione\n';
-            errorMessage += '• L\'URL del backend sia corretto (attuale: ' + API_URL + ')\n';
+            errorMessage += '• L\'URL del backend sia corretto (attuale: `' + API_URL + '`)\n';
             errorMessage += '• Non ci siano problemi di rete o firewall';
         } else if (error.message.includes('404')) {
             errorMessage += 'Endpoint non trovato. Verifica che il backend sia configurato correttamente.';
@@ -171,7 +197,7 @@ function clearChat() {
     chatContainer.innerHTML = '';
     sessionId = generateSessionId();
     localStorage.setItem('chatSessionId', sessionId);
-    addMessage('assistant', 'Nuova conversazione iniziata. Come posso aiutarti?');
+    addMessage('assistant', '✨ **Nuova conversazione iniziata.** Come posso aiutarti?');
 }
 
 // Event listeners
@@ -187,14 +213,20 @@ messageInput.addEventListener('keypress', (e) => {
 
 // Messaggio di benvenuto all'avvio
 window.addEventListener('load', () => {
+    // Verifica se marked.js è caricato
+    if (typeof marked === 'undefined') {
+        console.warn('⚠️ marked.js non è caricato. Il rendering del markdown non sarà disponibile.');
+    }
+    
     addMessage('assistant', 
-        'Ciao! 👋 Sono il chatbot per informazioni su scuole di lingua.\n\n' +
+        '# Ciao! 👋\n\n' +
+        'Sono il chatbot per informazioni su **scuole di lingua**.\n\n' +
         'Posso aiutarti con:\n' +
-        '• Prezzi dei corsi\n' +
-        '• Opzioni di alloggio\n' +
-        '• Date e disponibilità\n' +
-        '• Transfer aeroportuali\n\n' +
-        'Cosa vorresti sapere?'
+        '• **Prezzi dei corsi**\n' +
+        '• **Opzioni di alloggio**\n' +
+        '• **Date e disponibilità**\n' +
+        '• **Transfer aeroportuali**\n\n' +
+        '*Cosa vorresti sapere?*'
     );
     
     // Check configurazione
