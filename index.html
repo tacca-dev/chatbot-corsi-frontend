@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Scuole di Lingua</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Chatbot Scuole di Lingua</h1>
+        <p>Chiedi qualsiasi cosa sui corsi, prezzi e alloggi</p>
+    </div>
+
+    <div class="chat-container" id="chatContainer">
+        <!-- I messaggi appariranno qui -->
+    </div>
+
+    <div class="input-container">
+        <div class="input-wrapper">
+            <input 
+                type="text" 
+                id="messageInput" 
+                placeholder="Fai una domanda..." 
+                autocomplete="off"
+            >
+            <button id="sendButton">Invia</button>
+            <button class="clear-button" onclick="clearChat()">🧹 Pulisci</button>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Powered by RAG + OpenAI | <span id="time"></span></p>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
