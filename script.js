@@ -30,7 +30,6 @@ const timeElement = document.getElementById('time');
 const uploadSection = document.getElementById('uploadSection');
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
-const folderInput = document.getElementById('folderInput');
 const browseButton = document.getElementById('browseButton');
 const filesPreview = document.getElementById('filesPreview');
 const filesList = document.getElementById('filesList');
@@ -93,52 +92,13 @@ uploadArea.addEventListener('drop', handleDrop, false);
 
 function handleDrop(e) {
     const dt = e.dataTransfer;
-    const items = dt.items;
-    
-    if (items) {
-        // Usa DataTransferItemList per supportare cartelle
-        for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            if (item.kind === 'file') {
-                const entry = item.webkitGetAsEntry();
-                if (entry) {
-                    traverseFileTree(entry);
-                }
-            }
-        }
-    } else {
-        // Fallback per browser che non supportano entries
-        const files = dt.files;
-        handleFiles(files);
-    }
-}
-
-// Attraversa ricorsivamente le cartelle
-function traverseFileTree(item, path = "") {
-    if (item.isFile) {
-        item.file(file => {
-            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-                addFile(file, path);
-            }
-        });
-    } else if (item.isDirectory) {
-        const dirReader = item.createReader();
-        dirReader.readEntries(entries => {
-            for (let i = 0; i < entries.length; i++) {
-                traverseFileTree(entries[i], path + item.name + "/");
-            }
-        });
-    }
+    const files = dt.files;
+    handleFiles(files);
 }
 
 // Click sul pulsante sfoglia
 browseButton.addEventListener('click', () => {
-    // Chiedi se vuole selezionare file o cartella
-    if (confirm('Vuoi selezionare una cartella?\n\nOK = Cartella\nAnnulla = File singoli')) {
-        folderInput.click();
-    } else {
-        fileInput.click();
-    }
+    fileInput.click();
 });
 
 // Click sull'area di upload
@@ -152,11 +112,6 @@ fileInput.addEventListener('change', (e) => {
     handleFiles(e.target.files);
 });
 
-// Gestione selezione cartella
-folderInput.addEventListener('change', (e) => {
-    handleFiles(e.target.files);
-});
-
 // Processa i file selezionati
 function handleFiles(files) {
     Array.from(files).forEach(file => {
@@ -167,13 +122,12 @@ function handleFiles(files) {
 }
 
 // Aggiungi file alla lista
-function addFile(file, path = '') {
-    const fileId = path + file.name;
+function addFile(file) {
+    const fileId = file.name;
     
     if (!selectedFiles.has(fileId)) {
         selectedFiles.set(fileId, {
             file: file,
-            path: path,
             id: fileId
         });
         
@@ -204,7 +158,7 @@ function createFileItem(fileInfo) {
     div.dataset.fileId = fileInfo.id;
     
     const fileSize = formatFileSize(fileInfo.file.size);
-    const fileName = fileInfo.path ? `${fileInfo.path}${fileInfo.file.name}` : fileInfo.file.name;
+    const fileName = fileInfo.file.name;
     
     div.innerHTML = `
         <svg class="file-icon" viewBox="0 0 24 24" fill="currentColor">
@@ -259,7 +213,6 @@ clearFilesBtn.addEventListener('click', () => {
     updateFilesList();
     hideFilesPreview();
     fileInput.value = '';
-    folderInput.value = '';
 });
 
 // Gestione pulsante upload
