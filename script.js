@@ -125,6 +125,19 @@ function handleFiles(files) {
 function addFile(file) {
     const fileId = file.name;
     
+    // Limita a 5 file per volta
+    if (selectedFiles.size >= 5) {
+        alert('Puoi caricare massimo 5 file alla volta.');
+        return;
+    }
+    
+    // Limita dimensione file a 10MB
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+        alert(`Il file "${file.name}" è troppo grande. Dimensione massima: 10MB`);
+        return;
+    }
+    
     if (!selectedFiles.has(fileId)) {
         selectedFiles.set(fileId, {
             file: file,
@@ -145,10 +158,20 @@ function updateFilesList() {
         filesList.appendChild(fileItem);
     });
     
-    // Aggiorna testo del pulsante
+    // Calcola dimensione totale
+    let totalSize = 0;
+    selectedFiles.forEach(fileInfo => {
+        totalSize += fileInfo.file.size;
+    });
+    
+    // Aggiorna testo del pulsante con dimensione totale
     const fileCount = selectedFiles.size;
     const btnText = uploadBtn.querySelector('.upload-btn-text');
-    btnText.textContent = `Elabora ${fileCount} ${fileCount === 1 ? 'Documento' : 'Documenti'}`;
+    if (fileCount > 0) {
+        btnText.textContent = `Elabora ${fileCount} ${fileCount === 1 ? 'Documento' : 'Documenti'} (${formatFileSize(totalSize)})`;
+    } else {
+        btnText.textContent = 'Elabora Documenti';
+    }
 }
 
 // Crea elemento file
@@ -224,23 +247,119 @@ uploadBtn.addEventListener('click', async () => {
     uploadBtn.querySelector('.upload-btn-text').style.display = 'none';
     uploadBtn.querySelector('.upload-btn-loader').style.display = 'inline-flex';
     
-    // Simula elaborazione (per ora solo estetico)
-    addMessage('assistant', `📤 **Preparazione per l'elaborazione di ${selectedFiles.size} documenti PDF...**\n\nQuesta funzionalità sarà presto disponibile!`);
+    // Converti Map in array per iterazione
+    const filesArray = Array.from(selectedFiles.values());
+    let successCount = 0;
+    let failCount = 0;
     
-    // Dopo 3 secondi, resetta
-    setTimeout(() => {
-        uploadBtn.disabled = false;
-        uploadBtn.querySelector('.upload-btn-text').style.display = 'inline';
-        uploadBtn.querySelector('.upload-btn-loader').style.display = 'none';
+    // Aggiungi messaggio iniziale
+    addMessage('assistant', `📤 **Avvio elaborazione di ${filesArray.length} documento${filesArray.length > 1 ? 'i' : ''} PDF...**\n\nQuesto processo potrebbe richiedere alcuni minuti.`);
+    
+    // Processa ogni file
+    for (let i = 0; i < filesArray.length; i++) {
+        const fileInfo = filesArray[i];
+        const file = fileInfo.file;
         
-        // Nascondi area upload
+        // Mostra stato per questo file
+        const statusMsg = addStatusMessage(`📄 Elaborazione ${i + 1}/${filesArray.length}: ${file.name}`);
+        
+        try {
+            // Crea FormData per l'upload
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Invia file al backend
+            const response = await fetch(`${API_URL}/upload-pdf`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: 'Errore sconosciuto' }));
+                throw new Error(errorData.detail || `Errore HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            // Rimuovi messaggio di stato
+            statusMsg.remove();
+            
+            // Mostra risultato
+            if (result.status === 'success') {
+                successCount++;
+                addMessage('assistant', 
+                    `✅ **${file.name}** elaborato con successo!\n\n` +
+                    `• Tempo totale: ${result.processing_time.toFixed(1)}s\n` +
+                    `• Chunks creati: ${result.chunks_created}\n` +
+                    `• Chunks salvati: ${result.chunks_stored}`
+                );
+            } else {
+                failCount++;
+                addMessage('assistant', 
+                    `❌ **${file.name}** - Elaborazione fallita\n\n` +
+                    `Errore: ${result.message || 'Errore sconosciuto'}`
+                );
+            }
+            
+        } catch (error) {
+            // Rimuovi messaggio di stato se ancora presente
+            if (statusMsg.parentNode) {
+                statusMsg.remove();
+            }
+            
+            failCount++;
+            console.error('Errore upload:', error);
+            
+            addMessage('assistant', 
+                `❌ **${file.name}** - Errore durante l'upload\n\n` +
+                `${error.message}`
+            );
+        }
+        
+        // Piccola pausa tra file se ce ne sono altri
+        if (i < filesArray.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+    
+    // Messaggio finale di riepilogo
+    const totalFiles = filesArray.length;
+    if (successCount === totalFiles) {
+        addMessage('assistant', 
+            `🎉 **Elaborazione completata!**\n\n` +
+            `Tutti i ${totalFiles} documenti sono stati elaborati con successo e aggiunti al database.\n\n` +
+            `Ora puoi farmi domande sui contenuti dei documenti caricati!`
+        );
+    } else if (successCount > 0) {
+        addMessage('assistant', 
+            `⚠️ **Elaborazione parzialmente completata**\n\n` +
+            `• Successo: ${successCount}/${totalFiles}\n` +
+            `• Falliti: ${failCount}/${totalFiles}\n\n` +
+            `Puoi comunque farmi domande sui documenti elaborati con successo.`
+        );
+    } else {
+        addMessage('assistant', 
+            `❌ **Elaborazione fallita**\n\n` +
+            `Nessun documento è stato elaborato con successo.\n` +
+            `Per favore controlla i messaggi di errore e riprova.`
+        );
+    }
+    
+    // Reset UI
+    uploadBtn.disabled = false;
+    uploadBtn.querySelector('.upload-btn-text').style.display = 'inline';
+    uploadBtn.querySelector('.upload-btn-loader').style.display = 'none';
+    
+    // Se almeno un file è stato elaborato, nascondi area upload
+    if (successCount > 0) {
         uploadSection.classList.add('collapsed');
-        
-        // Pulisci file
-        selectedFiles.clear();
-        updateFilesList();
-        hideFilesPreview();
-    }, 3000);
+    }
+    
+    // Pulisci file selezionati
+    selectedFiles.clear();
+    updateFilesList();
+    hideFilesPreview();
+    fileInput.value = '';
 });
 
 // Toggle area upload
@@ -412,6 +531,7 @@ window.addEventListener('load', () => {
         '• **Opzioni di alloggio**\n' +
         '• **Date e disponibilità**\n' +
         '• **Transfer aeroportuali**\n\n' +
+        '💡 **Novità**: Puoi caricare documenti PDF usando l\'area in alto! I documenti verranno elaborati e aggiunti al database per arricchire le mie risposte.\n\n' +
         '*Cosa vorresti sapere?*'
     );
     
