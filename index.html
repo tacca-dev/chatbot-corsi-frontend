@@ -12,48 +12,6 @@
         <p>Chiedi qualsiasi cosa sui corsi, prezzi e alloggi</p>
     </div>
 
-    <!-- Area Drag & Drop -->
-    <div class="upload-section" id="uploadSection">
-        <div class="upload-container">
-            <div class="upload-area" id="uploadArea">
-                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <h3>Carica Documenti PDF</h3>
-                <p>Trascina qui i tuoi file PDF o cartelle</p>
-                <p class="upload-hint">oppure</p>
-                <button class="browse-button" id="browseButton">Sfoglia File</button>
-                <input type="file" id="fileInput" accept=".pdf" multiple hidden>
-                <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
-            </div>
-            
-            <!-- File preview area -->
-            <div class="files-preview" id="filesPreview" style="display: none;">
-                <div class="preview-header">
-                    <h4>File Selezionati</h4>
-                    <button class="clear-files-btn" id="clearFilesBtn">Rimuovi Tutti</button>
-                </div>
-                <div class="files-list" id="filesList"></div>
-                <button class="upload-btn" id="uploadBtn">
-                    <span class="upload-btn-text">Elabora Documenti</span>
-                    <span class="upload-btn-loader" style="display: none;">
-                        <span class="spinner"></span>
-                        Elaborazione...
-                    </span>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Pulsante per nascondere/mostrare upload -->
-        <button class="toggle-upload-btn" id="toggleUploadBtn" title="Nascondi area upload">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-        </button>
-    </div>
-
     <div class="chat-container" id="chatContainer">
         <!-- I messaggi appariranno qui -->
     </div>
@@ -68,7 +26,7 @@
             >
             <button id="sendButton">Invia</button>
             <button class="clear-button" onclick="clearChat()">🧹 Pulisci</button>
-            <button class="upload-toggle-button" id="uploadToggleButton" title="Carica documenti">
+            <button class="upload-button" id="uploadButton" title="Carica documenti">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="17 8 12 3 7 8"></polyline>
@@ -81,6 +39,10 @@
     <div class="footer">
         <p>Powered by RAG + OpenAI | <span id="time"></span></p>
     </div>
+
+    <!-- Input file nascosti -->
+    <input type="file" id="fileInput" accept=".pdf" multiple hidden>
+    <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
 
     <!-- Popup Selezione File da Cartella -->
     <div class="folder-selection-overlay" id="folderSelectionOverlay" style="display: none;">
@@ -146,13 +108,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Floating Action Button -->
-    <button class="fab" id="fabUpload" title="Carica documenti">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-        </svg>
-    </button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
     <script src="script.js"></script>
