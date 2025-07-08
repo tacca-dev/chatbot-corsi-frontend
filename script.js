@@ -129,11 +129,21 @@ folderInput.addEventListener('change', (e) => {
     );
     
     if (pdfFiles.length > 0) {
-        tempFolderFiles = pdfFiles.map(file => ({
-            file: file,
-            path: '',
-            folderName: 'Cartella Selezionata'
-        }));
+        // Crea nuovi File objects puliti per evitare problemi con webkitRelativePath
+        tempFolderFiles = pdfFiles.map(originalFile => {
+            // Crea un nuovo File object con solo il nome base del file
+            const fileName = originalFile.name.split('/').pop() || originalFile.name;
+            const cleanFile = new File([originalFile], fileName, {
+                type: originalFile.type || 'application/pdf',
+                lastModified: originalFile.lastModified
+            });
+            
+            return {
+                file: cleanFile,
+                path: '',
+                folderName: 'Cartella Selezionata'
+            };
+        });
         
         showFolderSelectionPopup(tempFolderFiles);
     } else {
