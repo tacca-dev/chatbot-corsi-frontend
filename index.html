@@ -22,10 +22,11 @@
                     <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
                 <h3>Carica Documenti PDF</h3>
-                <p>Trascina qui i tuoi file PDF</p>
+                <p>Trascina qui i tuoi file PDF o cartelle</p>
                 <p class="upload-hint">oppure</p>
                 <button class="browse-button" id="browseButton">Sfoglia File</button>
                 <input type="file" id="fileInput" accept=".pdf" multiple hidden>
+                <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
             </div>
             
             <!-- File preview area -->
@@ -79,6 +80,38 @@
 
     <div class="footer">
         <p>Powered by RAG + OpenAI | <span id="time"></span></p>
+    </div>
+
+    <!-- Popup Selezione File da Cartella -->
+    <div class="folder-selection-overlay" id="folderSelectionOverlay" style="display: none;">
+        <div class="folder-selection-modal">
+            <div class="modal-header">
+                <h3>Seleziona i PDF da elaborare</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            
+            <div class="modal-subheader">
+                <p id="folderName">Cartella: </p>
+                <p id="fileCount">0 file PDF trovati</p>
+            </div>
+            
+            <div class="modal-controls">
+                <button class="control-btn" id="selectAllBtn">Seleziona Tutti</button>
+                <button class="control-btn" id="deselectAllBtn">Deseleziona Tutti</button>
+                <div class="selected-counter">
+                    <span id="selectedCount">0</span> file selezionati
+                </div>
+            </div>
+            
+            <div class="modal-file-list" id="modalFileList">
+                <!-- File con checkbox verranno inseriti qui -->
+            </div>
+            
+            <div class="modal-footer">
+                <button class="modal-btn cancel" id="modalCancel">Annulla</button>
+                <button class="modal-btn confirm" id="modalConfirm">Conferma Selezione</button>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>

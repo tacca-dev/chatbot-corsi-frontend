@@ -30,6 +30,7 @@ const timeElement = document.getElementById('time');
 const uploadSection = document.getElementById('uploadSection');
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
+const folderInput = document.getElementById('folderInput');
 const browseButton = document.getElementById('browseButton');
 const filesPreview = document.getElementById('filesPreview');
 const filesList = document.getElementById('filesList');
@@ -38,8 +39,22 @@ const uploadBtn = document.getElementById('uploadBtn');
 const toggleUploadBtn = document.getElementById('toggleUploadBtn');
 const uploadToggleButton = document.getElementById('uploadToggleButton');
 
+// Elementi Popup Selezione Cartella
+const folderSelectionOverlay = document.getElementById('folderSelectionOverlay');
+const modalClose = document.getElementById('modalClose');
+const modalCancel = document.getElementById('modalCancel');
+const modalConfirm = document.getElementById('modalConfirm');
+const selectAllBtn = document.getElementById('selectAllBtn');
+const deselectAllBtn = document.getElementById('deselectAllBtn');
+const modalFileList = document.getElementById('modalFileList');
+const folderNameElement = document.getElementById('folderName');
+const fileCountElement = document.getElementById('fileCount');
+const selectedCountElement = document.getElementById('selectedCount');
+
 // Variabili per gestione file
 let selectedFiles = new Map(); // Map per evitare duplicati
+let tempFolderFiles = []; // Array temporaneo per file da cartella
+let isProcessingFolder = false; // Flag per evitare aperture multiple
 
 // Aggiorna ora ogni secondo
 function updateTime() {
@@ -92,13 +107,229 @@ uploadArea.addEventListener('drop', handleDrop, false);
 
 function handleDrop(e) {
     const dt = e.dataTransfer;
-    const files = dt.files;
-    handleFiles(files);
+    const items = dt.items;
+    
+    // Reset array temporaneo
+    tempFolderFiles = [];
+    isProcessingFolder = false;
+    
+    if (items) {
+        // Array per promesse di lettura file
+        const promises = [];
+        
+        // Usa DataTransferItemList per supportare cartelle
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file') {
+                const entry = item.webkitGetAsEntry();
+                if (entry) {
+                    if (entry.isDirectory) {
+                        isProcessingFolder = true;
+                    }
+                    promises.push(traverseFileTree(entry));
+                }
+            }
+        }
+        
+        // Aspetta che tutti i file siano letti
+        Promise.all(promises).then(() => {
+            if (isProcessingFolder && tempFolderFiles.length > 0) {
+                // Mostra popup per selezione
+                showFolderSelectionPopup(tempFolderFiles);
+            } else if (tempFolderFiles.length > 0) {
+                // Aggiungi file singoli direttamente
+                tempFolderFiles.forEach(fileInfo => {
+                    addFile(fileInfo.file, fileInfo.path);
+                });
+            }
+        });
+    } else {
+        // Fallback per browser che non supportano entries
+        const files = dt.files;
+        handleFiles(files);
+    }
 }
+
+// Attraversa ricorsivamente le cartelle (solo primo livello)
+function traverseFileTree(item, path = "") {
+    return new Promise((resolve) => {
+        if (item.isFile) {
+            item.file(file => {
+                if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                    tempFolderFiles.push({
+                        file: file,
+                        path: path,
+                        folderName: path || 'Root'
+                    });
+                }
+                resolve();
+            });
+        } else if (item.isDirectory) {
+            // Leggi solo il primo livello della cartella
+            const dirReader = item.createReader();
+            dirReader.readEntries(entries => {
+                const promises = [];
+                for (let i = 0; i < entries.length; i++) {
+                    // Solo file, ignora sottocartelle
+                    if (entries[i].isFile) {
+                        promises.push(traverseFileTree(entries[i], item.name));
+                    }
+                }
+                Promise.all(promises).then(resolve);
+            });
+        } else {
+            resolve();
+        }
+    });
+}
+
+// Mostra popup selezione file da cartella
+function showFolderSelectionPopup(folderFiles) {
+    // Raggruppa per cartella (nel caso di drop multipli)
+    const folderName = folderFiles[0].folderName || 'Cartella';
+    
+    // Aggiorna info header
+    folderNameElement.textContent = `Cartella: ${folderName}`;
+    fileCountElement.textContent = `${folderFiles.length} file PDF trovati`;
+    
+    // Pulisci lista precedente
+    modalFileList.innerHTML = '';
+    
+    // Crea checkbox per ogni file
+    folderFiles.forEach((fileInfo, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-checkbox-item';
+        fileItem.dataset.index = index;
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'file-checkbox';
+        checkbox.id = `file-check-${index}`;
+        checkbox.checked = true; // Selezionato di default
+        
+        const label = document.createElement('label');
+        label.className = 'file-label';
+        label.htmlFor = `file-check-${index}`;
+        label.innerHTML = `
+            ${fileInfo.file.name}
+            <span class="file-label-size">${formatFileSize(fileInfo.file.size)}</span>
+        `;
+        
+        // Click su item per toggle checkbox
+        fileItem.addEventListener('click', (e) => {
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                updateSelectedCount();
+                updateItemVisualState(fileItem, checkbox.checked);
+            }
+        });
+        
+        checkbox.addEventListener('change', () => {
+            updateSelectedCount();
+            updateItemVisualState(fileItem, checkbox.checked);
+        });
+        
+        fileItem.appendChild(checkbox);
+        fileItem.appendChild(label);
+        modalFileList.appendChild(fileItem);
+        
+        // Stato visuale iniziale
+        updateItemVisualState(fileItem, true);
+    });
+    
+    // Aggiorna contatore iniziale
+    updateSelectedCount();
+    
+    // Mostra popup
+    folderSelectionOverlay.style.display = 'flex';
+}
+
+// Aggiorna stato visuale item
+function updateItemVisualState(item, isSelected) {
+    if (isSelected) {
+        item.classList.add('selected');
+    } else {
+        item.classList.remove('selected');
+    }
+}
+
+// Aggiorna contatore file selezionati
+function updateSelectedCount() {
+    const checkboxes = modalFileList.querySelectorAll('.file-checkbox');
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    selectedCountElement.textContent = checkedCount;
+    
+    // Disabilita conferma se nessun file selezionato
+    modalConfirm.disabled = checkedCount === 0;
+}
+
+// Gestione pulsanti popup
+selectAllBtn.addEventListener('click', () => {
+    const checkboxes = modalFileList.querySelectorAll('.file-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = true;
+        const item = cb.closest('.file-checkbox-item');
+        updateItemVisualState(item, true);
+    });
+    updateSelectedCount();
+});
+
+deselectAllBtn.addEventListener('click', () => {
+    const checkboxes = modalFileList.querySelectorAll('.file-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+        const item = cb.closest('.file-checkbox-item');
+        updateItemVisualState(item, false);
+    });
+    updateSelectedCount();
+});
+
+// Chiusura popup
+function closeFolderSelectionPopup() {
+    folderSelectionOverlay.style.display = 'none';
+    tempFolderFiles = [];
+    isProcessingFolder = false;
+}
+
+modalClose.addEventListener('click', closeFolderSelectionPopup);
+modalCancel.addEventListener('click', closeFolderSelectionPopup);
+
+// Click fuori dal modal per chiudere
+folderSelectionOverlay.addEventListener('click', (e) => {
+    if (e.target === folderSelectionOverlay) {
+        closeFolderSelectionPopup();
+    }
+});
+
+// ESC per chiudere
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && folderSelectionOverlay.style.display === 'flex') {
+        closeFolderSelectionPopup();
+    }
+});
 
 // Click sul pulsante sfoglia
 browseButton.addEventListener('click', () => {
-    fileInput.click();
+    // Chiedi se vuole selezionare file o cartella
+    if (confirm('Vuoi selezionare una cartella?\n\nOK = Cartella\nAnnulla = File singoli')) {
+        folderInput.click();
+    } else {
+        fileInput.click();
+    }
+});
+
+// Conferma selezione dal popup
+modalConfirm.addEventListener('click', () => {
+    const checkboxes = modalFileList.querySelectorAll('.file-checkbox');
+    
+    checkboxes.forEach((checkbox, index) => {
+        if (checkbox.checked && tempFolderFiles[index]) {
+            const fileInfo = tempFolderFiles[index];
+            addFile(fileInfo.file, fileInfo.path);
+        }
+    });
+    
+    closeFolderSelectionPopup();
 });
 
 // Click sull'area di upload
@@ -121,9 +352,34 @@ function handleFiles(files) {
     });
 }
 
+// Gestione selezione cartella
+folderInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files);
+    const pdfFiles = files.filter(file => 
+        file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    if (pdfFiles.length > 0) {
+        // Prepara array per popup
+        tempFolderFiles = pdfFiles.map(file => ({
+            file: file,
+            path: '',
+            folderName: 'Cartella Selezionata'
+        }));
+        
+        // Mostra popup selezione
+        showFolderSelectionPopup(tempFolderFiles);
+    } else {
+        alert('Nessun file PDF trovato nella cartella selezionata.');
+    }
+    
+    // Reset input
+    folderInput.value = '';
+});
+
 // Aggiungi file alla lista
-function addFile(file) {
-    const fileId = file.name;
+function addFile(file, path = '') {
+    const fileId = (path ? path + '/' : '') + file.name;
     
     // Limita a 5 file per volta
     if (selectedFiles.size >= 5) {
@@ -141,6 +397,7 @@ function addFile(file) {
     if (!selectedFiles.has(fileId)) {
         selectedFiles.set(fileId, {
             file: file,
+            path: path,
             id: fileId
         });
         
@@ -181,7 +438,7 @@ function createFileItem(fileInfo) {
     div.dataset.fileId = fileInfo.id;
     
     const fileSize = formatFileSize(fileInfo.file.size);
-    const fileName = fileInfo.file.name;
+    const fileName = fileInfo.path ? `${fileInfo.path}/${fileInfo.file.name}` : fileInfo.file.name;
     
     div.innerHTML = `
         <svg class="file-icon" viewBox="0 0 24 24" fill="currentColor">
@@ -236,6 +493,7 @@ clearFilesBtn.addEventListener('click', () => {
     updateFilesList();
     hideFilesPreview();
     fileInput.value = '';
+    folderInput.value = '';
 });
 
 // Gestione pulsante upload
@@ -360,6 +618,7 @@ uploadBtn.addEventListener('click', async () => {
     updateFilesList();
     hideFilesPreview();
     fileInput.value = '';
+    folderInput.value = '';
 });
 
 // Toggle area upload
