@@ -51,6 +51,13 @@ const folderNameElement = document.getElementById('folderName');
 const fileCountElement = document.getElementById('fileCount');
 const selectedCountElement = document.getElementById('selectedCount');
 
+// Elementi Modal Scelta Upload e FAB
+const uploadTypeOverlay = document.getElementById('uploadTypeOverlay');
+const uploadTypeClose = document.getElementById('uploadTypeClose');
+const selectSingleFile = document.getElementById('selectSingleFile');
+const selectFolder = document.getElementById('selectFolder');
+const fabUpload = document.getElementById('fabUpload');
+
 // Variabili per gestione file
 let selectedFiles = new Map(); // Map per evitare duplicati
 let tempFolderFiles = []; // Array temporaneo per file da cartella
@@ -308,17 +315,79 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Click sul pulsante sfoglia
-browseButton.addEventListener('click', () => {
-    // Chiedi se vuole selezionare file o cartella
-    if (confirm('Vuoi selezionare una cartella?\n\nOK = Cartella\nAnnulla = File singoli')) {
-        folderInput.click();
-    } else {
-        fileInput.click();
+// Gestione Modal Scelta Upload
+function showUploadTypeModal() {
+    uploadTypeOverlay.style.display = 'flex';
+}
+
+function closeUploadTypeModal() {
+    uploadTypeOverlay.style.display = 'none';
+}
+
+// Click sul FAB
+fabUpload.addEventListener('click', showUploadTypeModal);
+
+// Click sul pulsante sfoglia nell'area upload
+browseButton.addEventListener('click', showUploadTypeModal);
+
+// Gestione scelte nel modal
+selectSingleFile.addEventListener('click', () => {
+    closeUploadTypeModal();
+    fileInput.click();
+});
+
+selectFolder.addEventListener('click', () => {
+    closeUploadTypeModal();
+    folderInput.click();
+});
+
+// Chiusura modal tipo upload
+uploadTypeClose.addEventListener('click', closeUploadTypeModal);
+
+uploadTypeOverlay.addEventListener('click', (e) => {
+    if (e.target === uploadTypeOverlay) {
+        closeUploadTypeModal();
     }
 });
 
-// Conferma selezione dal popup
+// ESC per chiudere modal tipo upload
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        if (uploadTypeOverlay.style.display === 'flex') {
+            closeUploadTypeModal();
+        }
+        if (folderSelectionOverlay.style.display === 'flex') {
+            closeFolderSelectionPopup();
+        }
+    }
+});
+
+// Gestione visibilità FAB quando si mostra/nasconde area upload
+const observer = new MutationObserver(() => {
+    if (uploadSection.classList.contains('collapsed')) {
+        fabUpload.classList.remove('hidden');
+    } else {
+        fabUpload.classList.add('hidden');
+    }
+});
+
+observer.observe(uploadSection, { attributes: true, attributeFilter: ['class'] });
+
+// Toggle area upload con nascondimento FAB
+toggleUploadBtn.addEventListener('click', () => {
+    uploadSection.classList.toggle('collapsed');
+});
+
+uploadToggleButton.addEventListener('click', () => {
+    uploadSection.classList.toggle('collapsed');
+});
+
+// Nascondi FAB all'avvio se area upload è visibile
+if (!uploadSection.classList.contains('collapsed')) {
+    fabUpload.classList.add('hidden');
+}
+
+// Conferma selezione dal popup cartella
 modalConfirm.addEventListener('click', () => {
     const checkboxes = modalFileList.querySelectorAll('.file-checkbox');
     

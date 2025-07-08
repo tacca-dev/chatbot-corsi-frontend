@@ -114,6 +114,46 @@
         </div>
     </div>
 
+    <!-- Modal Scelta Tipo Upload -->
+    <div class="upload-type-overlay" id="uploadTypeOverlay" style="display: none;">
+        <div class="upload-type-modal">
+            <div class="modal-header">
+                <h3>Cosa vuoi caricare?</h3>
+                <button class="modal-close" id="uploadTypeClose">&times;</button>
+            </div>
+            
+            <div class="upload-type-content">
+                <p>Seleziona il tipo di contenuto da analizzare:</p>
+                
+                <div class="upload-type-options">
+                    <button class="upload-type-option" id="selectSingleFile">
+                        <svg class="option-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span class="option-title">File Singolo</span>
+                        <span class="option-desc">Seleziona uno o più file PDF</span>
+                    </button>
+                    
+                    <button class="upload-type-option" id="selectFolder">
+                        <svg class="option-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span class="option-title">Cartella</span>
+                        <span class="option-desc">Seleziona PDF da una cartella</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="fab" id="fabUpload" title="Carica documenti">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+        </svg>
+    </button>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
     <script src="script.js"></script>
 </body>
