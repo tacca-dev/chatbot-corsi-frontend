@@ -351,7 +351,9 @@ async function uploadFiles() {
             
             const response = await fetch(`${API_URL}/upload-pdf`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                // Aggiungi timeout più lungo o rimuovilo
+                signal: AbortSignal.timeout(900000) // 15 minuti
             });
             
             if (!response.ok) {
