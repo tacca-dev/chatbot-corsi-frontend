@@ -51,6 +51,8 @@ const selectFolder = document.getElementById('selectFolder');
 let selectedFiles = new Map();
 let tempFolderFiles = [];
 
+let activeJobs = new Map();
+
 // Aggiorna ora ogni secondo
 function updateTime() {
     const now = new Date();
@@ -152,6 +154,229 @@ folderInput.addEventListener('change', (e) => {
     
     folderInput.value = ''; // Reset input
 });
+
+// Crea elemento di progresso per l'upload
+function createProgressElement(jobId, filename) {
+    const progressDiv = document.createElement('div');
+    progressDiv.className = 'upload-progress';
+    progressDiv.id = `progress-${jobId}`;
+    progressDiv.innerHTML = `
+        <div class="progress-header">
+            <span class="progress-filename">📄 ${filename}</span>
+            <button class="progress-cancel" onclick="cancelJob('${jobId}')" title="Annulla">×</button>
+        </div>
+        <div class="progress-status">Preparazione upload...</div>
+        <div class="progress-bar-container">
+            <div class="progress-bar" style="width: 0%"></div>
+        </div>
+        <div class="progress-details"></div>
+    `;
+    return progressDiv;
+}
+
+// Funzione per aggiornare il progresso
+function updateProgress(jobId, jobInfo) {
+    const progressEl = document.getElementById(`progress-${jobId}`);
+    if (!progressEl) return;
+    
+    const statusEl = progressEl.querySelector('.progress-status');
+    const barEl = progressEl.querySelector('.progress-bar');
+    const detailsEl = progressEl.querySelector('.progress-details');
+    
+    // Aggiorna barra progresso
+    barEl.style.width = `${jobInfo.progress || 0}%`;
+    
+    // Aggiorna stato
+    switch (jobInfo.status) {
+        case 'queued':
+            statusEl.textContent = '⏳ In coda...';
+            break;
+        case 'processing':
+            const stepText = {
+                'pdf_to_json': '📖 Lettura PDF con OCR...',
+                'chunking': '✂️ Divisione in chunks...',
+                'vectorization': '🧮 Creazione embeddings...',
+                'storing': '💾 Salvataggio nel database...'
+            };
+            statusEl.textContent = stepText[jobInfo.current_step] || '⚙️ Elaborazione...';
+            break;
+        case 'completed':
+            statusEl.textContent = '✅ Completato!';
+            progressEl.classList.add('completed');
+            break;
+        case 'failed':
+            statusEl.textContent = '❌ Errore';
+            progressEl.classList.add('failed');
+            break;
+    }
+    
+    // Aggiorna dettagli
+    if (jobInfo.step_details) {
+        detailsEl.textContent = jobInfo.step_details;
+    } else if (jobInfo.total_pages) {
+        detailsEl.textContent = `${jobInfo.total_pages} pagine`;
+    }
+}
+
+// Funzione asincrona per upload con polling
+async function uploadFilesAsync() {
+    if (selectedFiles.size === 0) return;
+    
+    const filesArray = Array.from(selectedFiles.values());
+    
+    addMessage('assistant', 
+        `📤 **Avvio elaborazione di ${filesArray.length} documento${filesArray.length > 1 ? 'i' : ''} PDF**\n\n` +
+        `I file verranno elaborati in background. Puoi continuare a usare il chatbot mentre aspetti!`
+    );
+    
+    // Container per i progressi
+    const progressContainer = document.createElement('div');
+    progressContainer.className = 'progress-container';
+    chatContainer.appendChild(progressContainer);
+    
+    // Avvia upload per ogni file
+    for (const fileInfo of filesArray) {
+        const file = fileInfo.file;
+        
+        try {
+            // 1. Invia file al server
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await fetch(`${API_URL}/upload-pdf-async`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ detail: 'Errore sconosciuto' }));
+                throw new Error(errorData.detail || `Errore HTTP ${response.status}`);
+            }
+            
+            const result = await response.json();
+            const jobId = result.job.job_id;
+            
+            // 2. Crea elemento progresso
+            const progressEl = createProgressElement(jobId, file.name);
+            progressContainer.appendChild(progressEl);
+            
+            // 3. Inizia polling
+            activeJobs.set(jobId, {
+                filename: file.name,
+                interval: setInterval(() => pollJobStatus(jobId), 2000)
+            });
+            
+            // Prima chiamata immediata
+            pollJobStatus(jobId);
+            
+        } catch (error) {
+            console.error('Errore upload:', error);
+            addMessage('assistant', 
+                `❌ **${file.name}** - Errore durante l'upload\n\n${error.message}`
+            );
+        }
+    }
+    
+    selectedFiles.clear();
+}
+
+// Funzione per il polling dello stato
+async function pollJobStatus(jobId) {
+    try {
+        const response = await fetch(`${API_URL}/job/${jobId}`);
+        
+        if (!response.ok) {
+            throw new Error(`Errore recupero stato: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const jobInfo = data.job;
+        
+        // Aggiorna UI
+        updateProgress(jobId, jobInfo);
+        
+        // Se completato o fallito, ferma il polling
+        if (jobInfo.status === 'completed' || jobInfo.status === 'failed') {
+            const job = activeJobs.get(jobId);
+            if (job) {
+                clearInterval(job.interval);
+                activeJobs.delete(jobId);
+                
+                // Mostra messaggio finale
+                if (jobInfo.status === 'completed') {
+                    const result = jobInfo.result;
+                    addMessage('assistant', 
+                        `✅ **${jobInfo.filename}** elaborato con successo!\n\n` +
+                        `• Tempo totale: ${result.processing_time.toFixed(1)}s\n` +
+                        `• Chunks creati: ${result.chunks_created}\n` +
+                        `• Chunks salvati: ${result.chunks_stored}\n\n` +
+                        `Il documento è ora disponibile nel database!`
+                    );
+                    
+                    // Rimuovi progress dopo 5 secondi
+                    setTimeout(() => {
+                        const progressEl = document.getElementById(`progress-${jobId}`);
+                        if (progressEl) {
+                            progressEl.style.opacity = '0';
+                            setTimeout(() => progressEl.remove(), 500);
+                        }
+                    }, 5000);
+                    
+                } else {
+                    addMessage('assistant', 
+                        `❌ **${jobInfo.filename}** - Elaborazione fallita\n\n` +
+                        `Errore: ${jobInfo.error || 'Errore sconosciuto'}`
+                    );
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error(`Errore polling job ${jobId}:`, error);
+        
+        // Dopo troppi errori, ferma il polling
+        const job = activeJobs.get(jobId);
+        if (job) {
+            job.errorCount = (job.errorCount || 0) + 1;
+            if (job.errorCount > 5) {
+                clearInterval(job.interval);
+                activeJobs.delete(jobId);
+                
+                addMessage('assistant', 
+                    `⚠️ Impossibile verificare lo stato dell'elaborazione per ${job.filename}. ` +
+                    `Il file potrebbe essere ancora in elaborazione sul server.`
+                );
+            }
+        }
+    }
+}
+
+// Funzione per cancellare un job
+async function cancelJob(jobId) {
+    try {
+        const response = await fetch(`${API_URL}/job/${jobId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            // Ferma polling
+            const job = activeJobs.get(jobId);
+            if (job) {
+                clearInterval(job.interval);
+                activeJobs.delete(jobId);
+            }
+            
+            // Aggiorna UI
+            const progressEl = document.getElementById(`progress-${jobId}`);
+            if (progressEl) {
+                progressEl.querySelector('.progress-status').textContent = '🚫 Annullato';
+                progressEl.classList.add('cancelled');
+            }
+        }
+    } catch (error) {
+        console.error('Errore cancellazione job:', error);
+    }
+}
 
 // Processa i file selezionati
 function handleFiles(files) {
@@ -331,98 +556,7 @@ function formatFileSize(bytes) {
 
 // Upload dei file
 async function uploadFiles() {
-    if (selectedFiles.size === 0) return;
-    
-    const filesArray = Array.from(selectedFiles.values());
-    let successCount = 0;
-    let failCount = 0;
-    
-    addMessage('assistant', `📤 **Avvio elaborazione di ${filesArray.length} documento${filesArray.length > 1 ? 'i' : ''} PDF...**\n\nQuesto processo potrebbe richiedere alcuni minuti.`);
-    
-    for (let i = 0; i < filesArray.length; i++) {
-        const fileInfo = filesArray[i];
-        const file = fileInfo.file;
-        
-        const statusMsg = addStatusMessage(`📄 Elaborazione ${i + 1}/${filesArray.length}: ${file.name}`);
-        
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            const response = await fetch(`${API_URL}/upload-pdf`, {
-                method: 'POST',
-                body: formData,
-                // Aggiungi timeout più lungo o rimuovilo
-                signal: AbortSignal.timeout(900000) // 15 minuti
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Errore sconosciuto' }));
-                throw new Error(errorData.detail || `Errore HTTP ${response.status}`);
-            }
-            
-            const result = await response.json();
-            
-            statusMsg.remove();
-            
-            if (result.status === 'success') {
-                successCount++;
-                addMessage('assistant', 
-                    `✅ **${file.name}** elaborato con successo!\n\n` +
-                    `• Tempo totale: ${result.processing_time.toFixed(1)}s\n` +
-                    `• Chunks creati: ${result.chunks_created}\n` +
-                    `• Chunks salvati: ${result.chunks_stored}`
-                );
-            } else {
-                failCount++;
-                addMessage('assistant', 
-                    `❌ **${file.name}** - Elaborazione fallita\n\n` +
-                    `Errore: ${result.message || 'Errore sconosciuto'}`
-                );
-            }
-            
-        } catch (error) {
-            if (statusMsg.parentNode) {
-                statusMsg.remove();
-            }
-            
-            failCount++;
-            console.error('Errore upload:', error);
-            
-            addMessage('assistant', 
-                `❌ **${file.name}** - Errore durante l'upload\n\n` +
-                `${error.message}`
-            );
-        }
-        
-        if (i < filesArray.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }
-    
-    const totalFiles = filesArray.length;
-    if (successCount === totalFiles) {
-        addMessage('assistant', 
-            `🎉 **Elaborazione completata!**\n\n` +
-            `Tutti i ${totalFiles} documenti sono stati elaborati con successo e aggiunti al database.\n\n` +
-            `Ora puoi farmi domande sui contenuti dei documenti caricati!`
-        );
-    } else if (successCount > 0) {
-        addMessage('assistant', 
-            `⚠️ **Elaborazione parzialmente completata**\n\n` +
-            `• Successo: ${successCount}/${totalFiles}\n` +
-            `• Falliti: ${failCount}/${totalFiles}\n\n` +
-            `Puoi comunque farmi domande sui documenti elaborati con successo.`
-        );
-    } else {
-        addMessage('assistant', 
-            `❌ **Elaborazione fallita**\n\n` +
-            `Nessun documento è stato elaborato con successo.\n` +
-            `Per favore controlla i messaggi di errore e riprova.`
-        );
-    }
-    
-    selectedFiles.clear();
+    await uploadFilesAsync();
 }
 
 // ===== FUNZIONI CHAT =====
@@ -597,4 +731,134 @@ window.addEventListener('load', () => {
 // Gestione focus automatico
 document.addEventListener('DOMContentLoaded', () => {
     messageInput.focus();
+});
+
+const progressStyles = `
+<style>
+.progress-container {
+    margin: 15px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.upload-progress {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 10px;
+    transition: all 0.3s ease;
+}
+
+.upload-progress.completed {
+    border-color: #10b981;
+    background: #f0fdf4;
+}
+
+.upload-progress.failed {
+    border-color: #ef4444;
+    background: #fef2f2;
+}
+
+.upload-progress.cancelled {
+    opacity: 0.6;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.progress-filename {
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.progress-cancel {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 0 5px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.progress-cancel:hover {
+    background: #f3f4f6;
+    color: #ef4444;
+}
+
+.progress-status {
+    font-size: 14px;
+    color: #4b5563;
+    margin-bottom: 8px;
+}
+
+.progress-bar-container {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+    transition: width 0.5s ease;
+    position: relative;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 100%
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-details {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+/* Animazione per completamento */
+.upload-progress.completed .progress-bar {
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+}
+
+.upload-progress.failed .progress-bar {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+</style>
+`;
+
+// Aggiungi gli stili al documento
+document.head.insertAdjacentHTML('beforeend', progressStyles);
+
+// Pulisci job attivi quando si lascia la pagina
+window.addEventListener('beforeunload', () => {
+    activeJobs.forEach((job, jobId) => {
+        clearInterval(job.interval);
+    });
 });
