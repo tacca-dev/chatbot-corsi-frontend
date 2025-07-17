@@ -34,7 +34,6 @@ const closeArtifactBtn = document.getElementById('closeArtifactBtn');
 const toggleArtifactBtn = document.getElementById('toggleArtifactBtn');
 const artifactSection = document.getElementById('artifactSection');
 const chatSection = document.getElementById('chatSection');
-const resizeHandle = document.getElementById('resizeHandle');
 
 // Snackbar
 const snackbar = document.getElementById('snackbar');
@@ -142,10 +141,6 @@ function showSnackbar(message, duration = 3000) {
 
 // ===== RESIZE FUNCTIONALITY =====
 
-let isResizing = false;
-let startX = 0;
-let startWidth = 0;
-
 // Toggle artifact panel
 toggleArtifactBtn.addEventListener('click', () => {
     artifactSection.classList.toggle('hidden');
@@ -161,34 +156,6 @@ closeArtifactBtn.addEventListener('click', () => {
     artifactSection.classList.add('hidden');
     chatSection.classList.add('fullwidth');
     showSnackbar('Pannello artifact chiuso');
-});
-
-// Resize handle
-resizeHandle.addEventListener('mousedown', (e) => {
-    isResizing = true;
-    startX = e.clientX;
-    startWidth = artifactSection.offsetWidth;
-    document.body.style.cursor = 'col-resize';
-    e.preventDefault();
-});
-
-document.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-    
-    const width = startWidth - (e.clientX - startX);
-    const containerWidth = document.querySelector('.main-container').offsetWidth;
-    const percentage = (width / containerWidth) * 100;
-    
-    if (percentage >= 20 && percentage <= 60) {
-        artifactSection.style.width = percentage + '%';
-    }
-});
-
-document.addEventListener('mouseup', () => {
-    if (isResizing) {
-        isResizing = false;
-        document.body.style.cursor = 'default';
-    }
 });
 
 // ===== FUNZIONI ARTIFACT =====

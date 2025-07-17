@@ -1,8 +1,8 @@
 /* Material Design Color Palette */
 :root {
-    --primary: #6200EA;
-    --primary-dark: #3700B3;
-    --primary-light: #7C4DFF;
+    --primary: #1976D2;
+    --primary-dark: #1565C0;
+    --primary-light: #42A5F5;
     --secondary: #00BFA5;
     --secondary-dark: #00A693;
     --secondary-light: #64FFDA;
@@ -252,7 +252,7 @@ body {
 }
 
 .action-button:hover {
-    background-color: rgba(98, 0, 234, 0.08);
+    background-color: rgba(25, 118, 210, 0.08);
     color: var(--primary);
 }
 
@@ -293,35 +293,14 @@ body {
     }
 }
 
-/* Resize Handle */
+/* Resize Handle - Simplified */
 .resize-handle {
-    width: 4px;
-    background-color: var(--divider);
-    cursor: col-resize;
-    position: relative;
-    transition: all 0.3s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.resize-handle:hover {
-    background-color: var(--primary);
-    width: 8px;
-}
-
-.resize-handle-bar {
-    width: 2px;
-    height: 40px;
-    background-color: rgba(98, 0, 234, 0.3);
-    border-radius: 1px;
+    display: none; /* Remove drag handle */
 }
 
 /* Artifact Section */
 .artifact-section {
     width: 40%;
-    min-width: 300px;
-    max-width: 60%;
     background-color: var(--surface);
     display: flex;
     flex-direction: column;
@@ -334,6 +313,8 @@ body {
     width: 0;
     min-width: 0;
     overflow: hidden;
+    opacity: 0;
+    transform: translateX(100%);
 }
 
 .artifact-header {
@@ -557,7 +538,7 @@ body {
 }
 
 .text-button:hover {
-    background-color: rgba(98, 0, 234, 0.08);
+    background-color: rgba(25, 118, 210, 0.08);
 }
 
 .chip-button {
