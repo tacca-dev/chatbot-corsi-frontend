@@ -4,22 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chatbot Scuole di Lingua</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="header">
-        <h1>Chatbot Scuole di Lingua</h1>
-        <p>Chiedi qualsiasi cosa sui corsi, prezzi e alloggi</p>
+    <div class="app-bar">
+        <div class="app-bar-content">
+            <h1>Chatbot Scuole di Lingua</h1>
+            <p>Chiedi qualsiasi cosa sui corsi, prezzi e alloggi</p>
+        </div>
+        <button class="toggle-artifact-btn" id="toggleArtifactBtn" title="Mostra/Nascondi Artifact">
+            <span class="material-icons">view_sidebar</span>
+        </button>
     </div>
 
     <div class="main-container">
         <!-- Chat Section (Left) -->
-        <div class="chat-section">
+        <div class="chat-section" id="chatSection">
             <div class="chat-container" id="chatContainer">
                 <!-- I messaggi appariranno qui -->
             </div>
 
-            <div class="input-container">
+            <div class="input-card">
                 <div class="input-wrapper">
                     <input 
                         type="text" 
@@ -27,45 +34,50 @@
                         placeholder="Fai una domanda..." 
                         autocomplete="off"
                     >
-                    <button id="sendButton">Invia</button>
-                    <button class="clear-button" onclick="clearChat()">🧹 Pulisci</button>
-                    <button class="upload-button" id="uploadButton" title="Carica documenti">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="17 8 12 3 7 8"></polyline>
-                            <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
+                    <button class="fab-button send-button" id="sendButton">
+                        <span class="material-icons">send</span>
+                    </button>
+                </div>
+                <div class="input-actions">
+                    <button class="action-button" onclick="clearChat()">
+                        <span class="material-icons">cleaning_services</span>
+                        <span>Pulisci Chat</span>
+                    </button>
+                    <button class="fab-button upload-button" id="uploadButton" title="Carica documenti">
+                        <span class="material-icons">upload_file</span>
                     </button>
                 </div>
             </div>
         </div>
 
+        <!-- Resize Handle -->
+        <div class="resize-handle" id="resizeHandle">
+            <div class="resize-handle-bar"></div>
+        </div>
+
         <!-- Artifact Section (Right) -->
-        <div class="artifact-section">
+        <div class="artifact-section" id="artifactSection">
             <div class="artifact-header">
-                <h3>💸 Preventivo</h3>
+                <div class="artifact-title">
+                    <span class="material-icons">article</span>
+                    <h3>Riepilogo Risposte</h3>
+                </div>
                 <div class="artifact-controls">
-                    <button class="artifact-btn" id="copyArtifactBtn" title="Copia contenuto">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
+                    <button class="icon-button" id="copyArtifactBtn" title="Copia contenuto">
+                        <span class="material-icons">content_copy</span>
                     </button>
-                    <button class="artifact-btn" id="clearArtifactBtn" title="Pulisci artifact">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
+                    <button class="icon-button" id="clearArtifactBtn" title="Pulisci artifact">
+                        <span class="material-icons">delete_outline</span>
+                    </button>
+                    <button class="icon-button" id="closeArtifactBtn" title="Chiudi pannello">
+                        <span class="material-icons">close</span>
                     </button>
                 </div>
             </div>
             <div class="artifact-content" id="artifactContent">
                 <div class="artifact-placeholder">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
-                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        <path d="M13 3v5a2 2 0 002 2h5"></path>
-                    </svg>
-                    <!-- <p>Le risposte del chatbot appariranno qui in formato strutturato</p> -->
+                    <span class="material-icons placeholder-icon">auto_stories</span>
+                    <p>Le risposte del chatbot appariranno qui in formato strutturato</p>
                 </div>
             </div>
         </div>
@@ -80,11 +92,13 @@
     <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
 
     <!-- Popup Selezione File da Cartella -->
-    <div class="folder-selection-overlay" id="folderSelectionOverlay" style="display: none;">
-        <div class="folder-selection-modal">
+    <div class="modal-overlay" id="folderSelectionOverlay" style="display: none;">
+        <div class="modal-card">
             <div class="modal-header">
                 <h3>Seleziona i PDF da elaborare</h3>
-                <button class="modal-close" id="modalClose">&times;</button>
+                <button class="icon-button" id="modalClose">
+                    <span class="material-icons">close</span>
+                </button>
             </div>
             
             <div class="modal-subheader">
@@ -93,8 +107,14 @@
             </div>
             
             <div class="modal-controls">
-                <button class="control-btn" id="selectAllBtn">Seleziona Tutti</button>
-                <button class="control-btn" id="deselectAllBtn">Deseleziona Tutti</button>
+                <button class="chip-button" id="selectAllBtn">
+                    <span class="material-icons">done_all</span>
+                    Seleziona Tutti
+                </button>
+                <button class="chip-button" id="deselectAllBtn">
+                    <span class="material-icons">remove_done</span>
+                    Deseleziona Tutti
+                </button>
                 <div class="selected-counter">
                     <span id="selectedCount">0</span> file selezionati
                 </div>
@@ -105,44 +125,44 @@
             </div>
             
             <div class="modal-footer">
-                <button class="modal-btn cancel" id="modalCancel">Annulla</button>
-                <button class="modal-btn confirm" id="modalConfirm">Conferma Selezione</button>
+                <button class="text-button" id="modalCancel">Annulla</button>
+                <button class="raised-button primary" id="modalConfirm">Conferma Selezione</button>
             </div>
         </div>
     </div>
 
     <!-- Modal Scelta Tipo Upload -->
-    <div class="upload-type-overlay" id="uploadTypeOverlay" style="display: none;">
-        <div class="upload-type-modal">
+    <div class="modal-overlay" id="uploadTypeOverlay" style="display: none;">
+        <div class="modal-card compact">
             <div class="modal-header">
                 <h3>Cosa vuoi caricare?</h3>
-                <button class="modal-close" id="uploadTypeClose">&times;</button>
+                <button class="icon-button" id="uploadTypeClose">
+                    <span class="material-icons">close</span>
+                </button>
             </div>
             
             <div class="upload-type-content">
                 <p>Seleziona il tipo di contenuto da analizzare:</p>
                 
                 <div class="upload-type-options">
-                    <button class="upload-type-option" id="selectSingleFile">
-                        <svg class="option-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                        </svg>
-                        <span class="option-title">File Singolo</span>
-                        <span class="option-desc">Seleziona uno o più file PDF</span>
-                    </button>
+                    <div class="upload-card" id="selectSingleFile">
+                        <span class="material-icons upload-icon">description</span>
+                        <span class="upload-title">File Singolo</span>
+                        <span class="upload-desc">Seleziona uno o più file PDF</span>
+                    </div>
                     
-                    <button class="upload-type-option" id="selectFolder">
-                        <svg class="option-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                        </svg>
-                        <span class="option-title">Cartella</span>
-                        <span class="option-desc">Seleziona PDF da una cartella</span>
-                    </button>
+                    <div class="upload-card" id="selectFolder">
+                        <span class="material-icons upload-icon">folder_open</span>
+                        <span class="upload-title">Cartella</span>
+                        <span class="upload-desc">Seleziona PDF da una cartella</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Snackbar per notifiche -->
+    <div class="snackbar" id="snackbar"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/11.1.1/marked.min.js"></script>
     <script src="script.js"></script>

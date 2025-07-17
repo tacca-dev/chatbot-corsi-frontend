@@ -30,6 +30,14 @@ const uploadButton = document.getElementById('uploadButton');
 const artifactContent = document.getElementById('artifactContent');
 const copyArtifactBtn = document.getElementById('copyArtifactBtn');
 const clearArtifactBtn = document.getElementById('clearArtifactBtn');
+const closeArtifactBtn = document.getElementById('closeArtifactBtn');
+const toggleArtifactBtn = document.getElementById('toggleArtifactBtn');
+const artifactSection = document.getElementById('artifactSection');
+const chatSection = document.getElementById('chatSection');
+const resizeHandle = document.getElementById('resizeHandle');
+
+// Snackbar
+const snackbar = document.getElementById('snackbar');
 
 // Elementi file input
 const fileInput = document.getElementById('fileInput');
@@ -61,6 +69,99 @@ let activeJobs = new Map();
 
 // Storage per le risposte dell'artifact
 let artifactResponses = [];
+
+// ===== FUNZIONI MATERIAL DESIGN =====
+
+// Crea effetto ripple
+function createRipple(event) {
+    const button = event.currentTarget;
+    const ripple = document.createElement('span');
+    const rect = button.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height);
+    const x = event.clientX - rect.left - size / 2;
+    const y = event.clientY - rect.top - size / 2;
+    
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = x + 'px';
+    ripple.style.top = y + 'px';
+    ripple.classList.add('ripple');
+    
+    button.appendChild(ripple);
+    
+    setTimeout(() => ripple.remove(), 600);
+}
+
+// Aggiungi ripple a tutti i bottoni
+document.addEventListener('DOMContentLoaded', () => {
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach(button => {
+        button.addEventListener('click', createRipple);
+    });
+});
+
+// Mostra snackbar
+function showSnackbar(message, duration = 3000) {
+    snackbar.textContent = message;
+    snackbar.classList.add('show');
+    
+    setTimeout(() => {
+        snackbar.classList.remove('show');
+    }, duration);
+}
+
+// ===== RESIZE FUNCTIONALITY =====
+
+let isResizing = false;
+let startX = 0;
+let startWidth = 0;
+
+// Toggle artifact panel
+toggleArtifactBtn.addEventListener('click', () => {
+    artifactSection.classList.toggle('hidden');
+    chatSection.classList.toggle('fullwidth');
+    
+    const icon = toggleArtifactBtn.querySelector('.material-icons');
+    icon.textContent = artifactSection.classList.contains('hidden') ? 'view_sidebar' : 'view_sidebar';
+    
+    const message = artifactSection.classList.contains('hidden') ? 
+        'Pannello artifact nascosto' : 'Pannello artifact visibile';
+    showSnackbar(message);
+});
+
+// Close artifact panel
+closeArtifactBtn.addEventListener('click', () => {
+    artifactSection.classList.add('hidden');
+    chatSection.classList.add('fullwidth');
+    showSnackbar('Pannello artifact chiuso');
+});
+
+// Resize handle
+resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = artifactSection.offsetWidth;
+    document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    
+    const width = startWidth - (e.clientX - startX);
+    const containerWidth = document.querySelector('.main-container').offsetWidth;
+    const percentage = (width / containerWidth) * 100;
+    
+    if (percentage >= 20 && percentage <= 60) {
+        artifactSection.style.width = percentage + '%';
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (isResizing) {
+        isResizing = false;
+        document.body.style.cursor = 'default';
+    }
+});
 
 // ===== FUNZIONI ARTIFACT =====
 
@@ -127,7 +228,7 @@ function addToArtifact(content, timestamp = new Date()) {
 // Copia contenuto artifact
 copyArtifactBtn.addEventListener('click', async () => {
     if (artifactResponses.length === 0) {
-        alert('Nessun contenuto da copiare');
+        showSnackbar('Nessun contenuto da copiare');
         return;
     }
     
@@ -137,22 +238,21 @@ copyArtifactBtn.addEventListener('click', async () => {
     try {
         await navigator.clipboard.writeText(latestResponse);
         
-        // Feedback visivo
-        const originalHTML = copyArtifactBtn.innerHTML;
-        copyArtifactBtn.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color: #10b981;">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-        `;
-        copyArtifactBtn.style.borderColor = '#10b981';
+        // Feedback con Material Icons
+        const icon = copyArtifactBtn.querySelector('.material-icons');
+        const originalIcon = icon.textContent;
+        icon.textContent = 'done';
+        copyArtifactBtn.style.color = 'var(--success)';
+        
+        showSnackbar('Contenuto copiato negli appunti!');
         
         setTimeout(() => {
-            copyArtifactBtn.innerHTML = originalHTML;
-            copyArtifactBtn.style.borderColor = '';
+            icon.textContent = originalIcon;
+            copyArtifactBtn.style.color = '';
         }, 2000);
     } catch (err) {
         console.error('Errore nella copia:', err);
-        alert('Impossibile copiare il contenuto');
+        showSnackbar('Impossibile copiare il contenuto');
     }
 });
 
@@ -163,14 +263,12 @@ clearArtifactBtn.addEventListener('click', () => {
     if (confirm('Vuoi davvero cancellare tutte le risposte salvate?')) {
         artifactContent.innerHTML = `
             <div class="artifact-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
-                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    <path d="M13 3v5a2 2 0 002 2h5"></path>
-                </svg>
+                <span class="material-icons placeholder-icon">auto_stories</span>
                 <p>Le risposte del chatbot appariranno qui in formato strutturato</p>
             </div>
         `;
         artifactResponses = [];
+        showSnackbar('Artifact pulito');
     }
 });
 
@@ -859,130 +957,6 @@ window.addEventListener('load', () => {
 document.addEventListener('DOMContentLoaded', () => {
     messageInput.focus();
 });
-
-// Stili per progress dinamici (come nell'originale)
-const progressStyles = `
-<style>
-.progress-container {
-    margin: 15px 0;
-    padding: 10px;
-    background: #f8f9fa;
-    border-radius: 8px;
-}
-
-.upload-progress {
-    background: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 10px;
-    transition: all 0.3s ease;
-}
-
-.upload-progress.completed {
-    border-color: #10b981;
-    background: #f0fdf4;
-}
-
-.upload-progress.failed {
-    border-color: #ef4444;
-    background: #fef2f2;
-}
-
-.upload-progress.cancelled {
-    opacity: 0.6;
-}
-
-.progress-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.progress-filename {
-    font-weight: 500;
-    color: #1f2937;
-}
-
-.progress-cancel {
-    background: none;
-    border: none;
-    font-size: 20px;
-    color: #6b7280;
-    cursor: pointer;
-    padding: 0 5px;
-    border-radius: 4px;
-    transition: all 0.2s;
-}
-
-.progress-cancel:hover {
-    background: #f3f4f6;
-    color: #ef4444;
-}
-
-.progress-status {
-    font-size: 14px;
-    color: #4b5563;
-    margin-bottom: 8px;
-}
-
-.progress-bar-container {
-    height: 8px;
-    background: #e5e7eb;
-    border-radius: 4px;
-    overflow: hidden;
-    margin-bottom: 5px;
-}
-
-.progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
-    transition: width 0.5s ease;
-    position: relative;
-}
-
-.progress-bar::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.3) 50%,
-        transparent 100%
-    );
-    animation: shimmer 2s infinite;
-}
-
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
-.progress-details {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-top: 4px;
-    font-style: italic;
-}
-
-/* Animazione per completamento */
-.upload-progress.completed .progress-bar {
-    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-}
-
-.upload-progress.failed .progress-bar {
-    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
-}
-</style>
-`;
-
-// Aggiungi gli stili al documento
-document.head.insertAdjacentHTML('beforeend', progressStyles);
 
 // Pulisci job attivi quando si lascia la pagina
 window.addEventListener('beforeunload', () => {
