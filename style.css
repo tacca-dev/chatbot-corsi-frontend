@@ -858,6 +858,25 @@ body {
     }
 }
 
+/* Font Awesome Icons Styling */
+.fas, .far, .fab {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.fab-button .fas {
+    font-size: 24px;
+}
+
+.upload-icon {
+    font-size: 48px !important;
+}
+
+.placeholder-icon {
+    font-size: 64px !important;
+    opacity: 0.3;
+}
+
 /* Spinner */
 .spinner {
     display: inline-block;

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chatbot Scuole di Lingua</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
             <p>Chiedi qualsiasi cosa sui corsi, prezzi e alloggi</p>
         </div>
         <button class="toggle-artifact-btn" id="toggleArtifactBtn" title="Mostra/Nascondi Artifact">
-            <span class="material-icons">view_sidebar</span>
+            <i class="fas fa-bars"></i>
         </button>
     </div>
 
@@ -35,16 +35,16 @@
                         autocomplete="off"
                     >
                     <button class="fab-button send-button" id="sendButton">
-                        <span class="material-icons">send</span>
+                        <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>
                 <div class="input-actions">
                     <button class="action-button" onclick="clearChat()">
-                        <span class="material-icons">cleaning_services</span>
+                        <i class="fas fa-broom"></i>
                         <span>Pulisci Chat</span>
                     </button>
                     <button class="fab-button upload-button" id="uploadButton" title="Carica documenti">
-                        <span class="material-icons">upload_file</span>
+                        <i class="fas fa-file-upload"></i>
                     </button>
                 </div>
             </div>
@@ -59,24 +59,24 @@
         <div class="artifact-section" id="artifactSection">
             <div class="artifact-header">
                 <div class="artifact-title">
-                    <span class="material-icons">article</span>
+                    <i class="fas fa-file-alt"></i>
                     <h3>Riepilogo Risposte</h3>
                 </div>
                 <div class="artifact-controls">
                     <button class="icon-button" id="copyArtifactBtn" title="Copia contenuto">
-                        <span class="material-icons">content_copy</span>
+                        <i class="fas fa-copy"></i>
                     </button>
                     <button class="icon-button" id="clearArtifactBtn" title="Pulisci artifact">
-                        <span class="material-icons">delete_outline</span>
+                        <i class="fas fa-trash"></i>
                     </button>
                     <button class="icon-button" id="closeArtifactBtn" title="Chiudi pannello">
-                        <span class="material-icons">close</span>
+                        <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
             <div class="artifact-content" id="artifactContent">
                 <div class="artifact-placeholder">
-                    <span class="material-icons placeholder-icon">auto_stories</span>
+                    <i class="fas fa-book-open placeholder-icon"></i>
                     <p>Le risposte del chatbot appariranno qui in formato strutturato</p>
                 </div>
             </div>
@@ -97,7 +97,7 @@
             <div class="modal-header">
                 <h3>Seleziona i PDF da elaborare</h3>
                 <button class="icon-button" id="modalClose">
-                    <span class="material-icons">close</span>
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
             
@@ -108,11 +108,11 @@
             
             <div class="modal-controls">
                 <button class="chip-button" id="selectAllBtn">
-                    <span class="material-icons">done_all</span>
+                    <i class="fas fa-check-double"></i>
                     Seleziona Tutti
                 </button>
                 <button class="chip-button" id="deselectAllBtn">
-                    <span class="material-icons">remove_done</span>
+                    <i class="fas fa-times-circle"></i>
                     Deseleziona Tutti
                 </button>
                 <div class="selected-counter">
@@ -137,7 +137,7 @@
             <div class="modal-header">
                 <h3>Cosa vuoi caricare?</h3>
                 <button class="icon-button" id="uploadTypeClose">
-                    <span class="material-icons">close</span>
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
             
@@ -146,13 +146,13 @@
                 
                 <div class="upload-type-options">
                     <div class="upload-card" id="selectSingleFile">
-                        <span class="material-icons upload-icon">description</span>
+                        <i class="fas fa-file-pdf upload-icon"></i>
                         <span class="upload-title">File Singolo</span>
                         <span class="upload-desc">Seleziona uno o più file PDF</span>
                     </div>
                     
                     <div class="upload-card" id="selectFolder">
-                        <span class="material-icons upload-icon">folder_open</span>
+                        <i class="fas fa-folder-open upload-icon"></i>
                         <span class="upload-title">Cartella</span>
                         <span class="upload-desc">Seleziona PDF da una cartella</span>
                     </div>

@@ -91,12 +91,43 @@ function createRipple(event) {
     setTimeout(() => ripple.remove(), 600);
 }
 
-// Aggiungi ripple a tutti i bottoni
+// Fix per icone se Material Icons non carica
 document.addEventListener('DOMContentLoaded', () => {
-    const buttons = document.querySelectorAll('button');
-    buttons.forEach(button => {
-        button.addEventListener('click', createRipple);
-    });
+    // Controlla se Material Icons è caricato
+    const testIcon = document.createElement('span');
+    testIcon.className = 'material-icons';
+    testIcon.textContent = 'check';
+    document.body.appendChild(testIcon);
+    
+    const isLoaded = window.getComputedStyle(testIcon).fontFamily.includes('Material Icons');
+    document.body.removeChild(testIcon);
+    
+    if (!isLoaded) {
+        // Sostituisci con emoji/simboli
+        const iconMap = {
+            'view_sidebar': '☰',
+            'send': '➤',
+            'upload_file': '📤',
+            'cleaning_services': '🧹',
+            'article': '📄',
+            'content_copy': '📋',
+            'delete_outline': '🗑️',
+            'close': '✕',
+            'done_all': '✓✓',
+            'remove_done': '✗',
+            'description': '📄',
+            'folder_open': '📁',
+            'auto_stories': '📚'
+        };
+        
+        document.querySelectorAll('.material-icons').forEach(icon => {
+            const text = icon.textContent.trim();
+            if (iconMap[text]) {
+                icon.textContent = iconMap[text];
+                icon.style.fontFamily = 'Arial, sans-serif';
+            }
+        });
+    }
 });
 
 // Mostra snackbar
@@ -119,9 +150,6 @@ let startWidth = 0;
 toggleArtifactBtn.addEventListener('click', () => {
     artifactSection.classList.toggle('hidden');
     chatSection.classList.toggle('fullwidth');
-    
-    const icon = toggleArtifactBtn.querySelector('.material-icons');
-    icon.textContent = artifactSection.classList.contains('hidden') ? 'view_sidebar' : 'view_sidebar';
     
     const message = artifactSection.classList.contains('hidden') ? 
         'Pannello artifact nascosto' : 'Pannello artifact visibile';
@@ -238,16 +266,16 @@ copyArtifactBtn.addEventListener('click', async () => {
     try {
         await navigator.clipboard.writeText(latestResponse);
         
-        // Feedback con Material Icons
-        const icon = copyArtifactBtn.querySelector('.material-icons');
-        const originalIcon = icon.textContent;
-        icon.textContent = 'done';
+        // Feedback con Font Awesome
+        const icon = copyArtifactBtn.querySelector('i');
+        const originalClass = icon.className;
+        icon.className = 'fas fa-check';
         copyArtifactBtn.style.color = 'var(--success)';
         
         showSnackbar('Contenuto copiato negli appunti!');
         
         setTimeout(() => {
-            icon.textContent = originalIcon;
+            icon.className = originalClass;
             copyArtifactBtn.style.color = '';
         }, 2000);
     } catch (err) {
