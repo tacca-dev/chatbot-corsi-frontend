@@ -1,6 +1,7 @@
 // ===== CONFIGURAZIONE IMPORTANTE =====
 // CAMBIA QUESTO CON L'URL DEL TUO BACKEND PYTHON!
 const API_URL = 'https://chatbot-corsi.onrender.com';
+// Per sviluppo locale usa: const API_URL = 'http://localhost:8000';
 
 // ===== FINE CONFIGURAZIONE =====
 
@@ -24,6 +25,11 @@ const messageInput = document.getElementById('messageInput');
 const sendButton = document.getElementById('sendButton');
 const timeElement = document.getElementById('time');
 const uploadButton = document.getElementById('uploadButton');
+
+// Elementi Artifact
+const artifactContent = document.getElementById('artifactContent');
+const copyArtifactBtn = document.getElementById('copyArtifactBtn');
+const clearArtifactBtn = document.getElementById('clearArtifactBtn');
 
 // Elementi file input
 const fileInput = document.getElementById('fileInput');
@@ -52,6 +58,121 @@ let selectedFiles = new Map();
 let tempFolderFiles = [];
 
 let activeJobs = new Map();
+
+// Storage per le risposte dell'artifact
+let artifactResponses = [];
+
+// ===== FUNZIONI ARTIFACT =====
+
+// Aggiungi risposta all'artifact
+function addToArtifact(content, timestamp = new Date()) {
+    // Rimuovi placeholder se presente
+    const placeholder = artifactContent.querySelector('.artifact-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+    
+    // Crea elemento risposta
+    const responseDiv = document.createElement('div');
+    responseDiv.className = 'artifact-response';
+    
+    // Header con timestamp
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'artifact-response-header';
+    headerDiv.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color: #3b82f6;">
+            <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"></path>
+        </svg>
+        <span class="artifact-timestamp">${timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
+    `;
+    
+    // Content
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'artifact-response-content';
+    
+    // Render markdown
+    if (typeof marked !== 'undefined') {
+        try {
+            contentDiv.innerHTML = marked.parse(content);
+        } catch (e) {
+            console.error('Errore nel parsing del markdown:', e);
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+        }
+    } else {
+        contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+    }
+    
+    responseDiv.appendChild(headerDiv);
+    responseDiv.appendChild(contentDiv);
+    
+    // Aggiungi all'inizio (più recente in alto)
+    artifactContent.insertBefore(responseDiv, artifactContent.firstChild);
+    
+    // Salva nel storage
+    artifactResponses.unshift({ content, timestamp });
+    
+    // Limita a 20 risposte
+    if (artifactResponses.length > 20) {
+        artifactResponses = artifactResponses.slice(0, 20);
+        // Rimuovi vecchie risposte dal DOM
+        const allResponses = artifactContent.querySelectorAll('.artifact-response');
+        if (allResponses.length > 20) {
+            for (let i = 20; i < allResponses.length; i++) {
+                allResponses[i].remove();
+            }
+        }
+    }
+}
+
+// Copia contenuto artifact
+copyArtifactBtn.addEventListener('click', async () => {
+    if (artifactResponses.length === 0) {
+        alert('Nessun contenuto da copiare');
+        return;
+    }
+    
+    // Prendi solo l'ultima risposta (la più recente)
+    const latestResponse = artifactResponses[0].content;
+    
+    try {
+        await navigator.clipboard.writeText(latestResponse);
+        
+        // Feedback visivo
+        const originalHTML = copyArtifactBtn.innerHTML;
+        copyArtifactBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color: #10b981;">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        `;
+        copyArtifactBtn.style.borderColor = '#10b981';
+        
+        setTimeout(() => {
+            copyArtifactBtn.innerHTML = originalHTML;
+            copyArtifactBtn.style.borderColor = '';
+        }, 2000);
+    } catch (err) {
+        console.error('Errore nella copia:', err);
+        alert('Impossibile copiare il contenuto');
+    }
+});
+
+// Pulisci artifact
+clearArtifactBtn.addEventListener('click', () => {
+    if (artifactResponses.length === 0) return;
+    
+    if (confirm('Vuoi davvero cancellare tutte le risposte salvate?')) {
+        artifactContent.innerHTML = `
+            <div class="artifact-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    <path d="M13 3v5a2 2 0 002 2h5"></path>
+                </svg>
+                <p>Le risposte del chatbot appariranno qui in formato strutturato</p>
+            </div>
+        `;
+        artifactResponses = [];
+    }
+});
 
 // Aggiorna ora ogni secondo
 function updateTime() {
@@ -352,7 +473,7 @@ async function pollJobStatus(jobId) {
 }
 
 // Funzione per cancellare un job
-async function cancelJob(jobId) {
+window.cancelJob = async function(jobId) {
     try {
         const response = await fetch(`${API_URL}/job/${jobId}`, {
             method: 'DELETE'
@@ -582,6 +703,12 @@ function addMessage(role, content, processInfo = null) {
         } else {
             contentDiv.innerHTML = content.replace(/\n/g, '<br>');
         }
+        
+        // Se è un messaggio dell'assistente, aggiungilo anche all'artifact
+        if (!content.includes('📤') && !content.includes('✅') && !content.includes('❌')) {
+            // Non aggiungere messaggi di sistema all'artifact
+            addToArtifact(content);
+        }
     }
     
     messageDiv.appendChild(contentDiv);
@@ -733,6 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
     messageInput.focus();
 });
 
+// Stili per progress dinamici (come nell'originale)
 const progressStyles = `
 <style>
 .progress-container {

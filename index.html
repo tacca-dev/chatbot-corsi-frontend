@@ -12,27 +12,62 @@
         <p>Chiedi qualsiasi cosa sui corsi, prezzi e alloggi</p>
     </div>
 
-    <div class="chat-container" id="chatContainer">
-        <!-- I messaggi appariranno qui -->
-    </div>
+    <div class="main-container">
+        <!-- Chat Section (Left) -->
+        <div class="chat-section">
+            <div class="chat-container" id="chatContainer">
+                <!-- I messaggi appariranno qui -->
+            </div>
 
-    <div class="input-container">
-        <div class="input-wrapper">
-            <input 
-                type="text" 
-                id="messageInput" 
-                placeholder="Fai una domanda..." 
-                autocomplete="off"
-            >
-            <button id="sendButton">Invia</button>
-            <button class="clear-button" onclick="clearChat()">🧹 Pulisci</button>
-            <button class="upload-button" id="uploadButton" title="Carica documenti">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="17 8 12 3 7 8"></polyline>
-                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-            </button>
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Fai una domanda..." 
+                        autocomplete="off"
+                    >
+                    <button id="sendButton">Invia</button>
+                    <button class="clear-button" onclick="clearChat()">🧹 Pulisci</button>
+                    <button class="upload-button" id="uploadButton" title="Carica documenti">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Artifact Section (Right) -->
+        <div class="artifact-section">
+            <div class="artifact-header">
+                <h3>💸 Preventivo</h3>
+                <div class="artifact-controls">
+                    <button class="artifact-btn" id="copyArtifactBtn" title="Copia contenuto">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                    <button class="artifact-btn" id="clearArtifactBtn" title="Pulisci artifact">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="artifact-content" id="artifactContent">
+                <div class="artifact-placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        <path d="M13 3v5a2 2 0 002 2h5"></path>
+                    </svg>
+                    <!-- <p>Le risposte del chatbot appariranno qui in formato strutturato</p> -->
+                </div>
+            </div>
         </div>
     </div>
 
