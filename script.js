@@ -1,6 +1,6 @@
 // ===== CONFIGURAZIONE IMPORTANTE =====
 // CAMBIA QUESTO CON L'URL DEL TUO BACKEND PYTHON!
-const API_URL = 'https://chatbot-corsi.onrender.com';
+const API_URL = 'https://chatbot-corsi-1.onrender.com';
 // Per sviluppo locale usa: const API_URL = 'http://localhost:8000';
 
 // ===== FINE CONFIGURAZIONE =====
