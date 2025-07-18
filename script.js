@@ -69,6 +69,19 @@ let activeJobs = new Map();
 // Storage per le risposte dell'artifact
 let artifactResponses = [];
 
+// Struttura per il preventivo
+let preventiveData = {
+    school: null,
+    course: null,
+    duration: null,
+    startDate: null,
+    accommodation: null,
+    extras: [],
+    totalPrice: 0,
+    currency: 'GBP',
+    reasoning: []
+};
+
 // ===== FUNZIONI MATERIAL DESIGN =====
 
 // Crea effetto ripple
@@ -90,7 +103,6 @@ function createRipple(event) {
     setTimeout(() => ripple.remove(), 600);
 }
 
-// Fix per icone se Material Icons non carica
 document.addEventListener('DOMContentLoaded', () => {
     // Controlla se Material Icons è caricato
     const testIcon = document.createElement('span');
@@ -158,80 +170,253 @@ closeArtifactBtn.addEventListener('click', () => {
     showSnackbar('Pannello artifact chiuso');
 });
 
-// ===== FUNZIONI ARTIFACT =====
+// ===== FUNZIONI PREVENTIVO =====
 
-// Aggiungi risposta all'artifact
-function addToArtifact(content, timestamp = new Date()) {
-    // Rimuovi placeholder se presente
-    const placeholder = artifactContent.querySelector('.artifact-placeholder');
-    if (placeholder) {
-        placeholder.remove();
-    }
+// Estrai informazioni dal messaggio del chatbot
+function extractCourseInfo(message) {
+    const info = {
+        prices: [],
+        durations: [],
+        courses: [],
+        accommodations: [],
+        schools: [],
+        dates: []
+    };
     
-    // Crea elemento risposta
-    const responseDiv = document.createElement('div');
-    responseDiv.className = 'artifact-response';
+    // Pattern per prezzi (£, GBP, euro, €)
+    const pricePatterns = [
+        /£(\d+(?:,\d{3})*(?:\.\d{2})?)/g,
+        /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:GBP|pounds?|sterline)/gi,
+        /€(\d+(?:,\d{3})*(?:\.\d{2})?)/g,
+        /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:EUR|euro)/gi
+    ];
     
-    // Header con timestamp
-    const headerDiv = document.createElement('div');
-    headerDiv.className = 'artifact-response-header';
-    headerDiv.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="color: #3b82f6;">
-            <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"></path>
-        </svg>
-        <span class="artifact-timestamp">${timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
-    `;
-    
-    // Content
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'artifact-response-content';
-    
-    // Render markdown
-    if (typeof marked !== 'undefined') {
-        try {
-            contentDiv.innerHTML = marked.parse(content);
-        } catch (e) {
-            console.error('Errore nel parsing del markdown:', e);
-            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
-        }
-    } else {
-        contentDiv.innerHTML = content.replace(/\n/g, '<br>');
-    }
-    
-    responseDiv.appendChild(headerDiv);
-    responseDiv.appendChild(contentDiv);
-    
-    // Aggiungi all'inizio (più recente in alto)
-    artifactContent.insertBefore(responseDiv, artifactContent.firstChild);
-    
-    // Salva nel storage
-    artifactResponses.unshift({ content, timestamp });
-    
-    // Limita a 20 risposte
-    if (artifactResponses.length > 20) {
-        artifactResponses = artifactResponses.slice(0, 20);
-        // Rimuovi vecchie risposte dal DOM
-        const allResponses = artifactContent.querySelectorAll('.artifact-response');
-        if (allResponses.length > 20) {
-            for (let i = 20; i < allResponses.length; i++) {
-                allResponses[i].remove();
+    pricePatterns.forEach(pattern => {
+        let match;
+        while ((match = pattern.exec(message)) !== null) {
+            const price = parseFloat(match[1].replace(/,/g, ''));
+            if (!isNaN(price)) {
+                info.prices.push(price);
             }
         }
+    });
+    
+    // Pattern per durate
+    const durationPattern = /(\d+)\s*(?:week|settiman|sett\.)/gi;
+    let match;
+    while ((match = durationPattern.exec(message)) !== null) {
+        info.durations.push(parseInt(match[1]));
     }
+    
+    // Pattern per corsi comuni
+    const coursePatterns = [
+        /IELTS/gi,
+        /General English/gi,
+        /Business English/gi,
+        /Cambridge/gi,
+        /Intensive/gi,
+        /Standard/gi
+    ];
+    
+    coursePatterns.forEach(pattern => {
+        if (pattern.test(message)) {
+            info.courses.push(pattern.source.replace(/\\/g, ''));
+        }
+    });
+    
+    // Pattern per alloggi
+    const accommodationPatterns = [
+        /homestay/gi,
+        /residence/gi,
+        /shared flat/gi,
+        /student house/gi,
+        /host family/gi
+    ];
+    
+    accommodationPatterns.forEach(pattern => {
+        if (pattern.test(message)) {
+            info.accommodations.push(pattern.source.replace(/\\/g, ''));
+        }
+    });
+    
+    // Pattern per scuole
+    const schoolPatterns = [
+        /BELS/g,
+        /CIAL/g,
+        /KSOE/g,
+        /Kings/g,
+        /ELC/g
+    ];
+    
+    schoolPatterns.forEach(pattern => {
+        if (pattern.test(message)) {
+            info.schools.push(pattern.source);
+        }
+    });
+    
+    return info;
 }
 
-// Copia contenuto artifact
-copyArtifactBtn.addEventListener('click', async () => {
-    if (artifactResponses.length === 0) {
-        showSnackbar('Nessun contenuto da copiare');
+// Aggiorna il preventivo basandosi sulle informazioni estratte
+function updatePreventive(message, isUserMessage = false) {
+    if (isUserMessage) {
+        // Analizza richieste dell'utente
+        if (/budget|economico|cheap|risparmio/i.test(message)) {
+            preventiveData.reasoning.push("L'utente ha espresso interesse per opzioni economiche");
+        }
+        if (/intensiv|rapido|veloce/i.test(message)) {
+            preventiveData.reasoning.push("L'utente preferisce un corso intensivo");
+        }
         return;
     }
     
-    // Prendi solo l'ultima risposta (la più recente)
-    const latestResponse = artifactResponses[0].content;
+    // Estrai informazioni dalla risposta del bot
+    const info = extractCourseInfo(message);
+    
+    // Aggiorna scuola
+    if (info.schools.length > 0 && !preventiveData.school) {
+        preventiveData.school = info.schools[0];
+        preventiveData.reasoning.push(`Scuola selezionata: ${info.schools[0]}`);
+    }
+    
+    // Aggiorna corso
+    if (info.courses.length > 0 && !preventiveData.course) {
+        preventiveData.course = info.courses[0];
+        preventiveData.reasoning.push(`Tipo di corso: ${info.courses[0]}`);
+    }
+    
+    // Aggiorna durata
+    if (info.durations.length > 0 && !preventiveData.duration) {
+        preventiveData.duration = Math.max(...info.durations);
+        preventiveData.reasoning.push(`Durata corso: ${preventiveData.duration} settimane`);
+    }
+    
+    // Aggiorna alloggio
+    if (info.accommodations.length > 0 && !preventiveData.accommodation) {
+        preventiveData.accommodation = info.accommodations[0];
+        preventiveData.reasoning.push(`Alloggio: ${info.accommodations[0]}`);
+    }
+    
+    // Aggiorna prezzo (prendi il più alto trovato come stima)
+    if (info.prices.length > 0) {
+        const maxPrice = Math.max(...info.prices);
+        if (maxPrice > preventiveData.totalPrice) {
+            preventiveData.totalPrice = maxPrice;
+            preventiveData.reasoning.push(`Prezzo aggiornato: ${formatPrice(maxPrice)}`);
+        }
+    }
+    
+    // Renderizza il preventivo aggiornato
+    renderPreventive();
+}
+
+// Formatta il prezzo
+function formatPrice(price) {
+    if (preventiveData.currency === 'EUR') {
+        return `€${price.toFixed(2)}`;
+    }
+    return `£${price.toFixed(2)}`;
+}
+
+// Renderizza il preventivo nell'artifact
+function renderPreventive() {
+    const preventiveHTML = `
+        <div class="preventive-container">
+            <div class="preventive-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path>
+                </svg>
+                <h2>Preventivo Personalizzato</h2>
+            </div>
+            
+            <div class="preventive-content">
+                ${preventiveData.school || preventiveData.course ? `
+                    <div class="preventive-section">
+                        <h3>Dettagli Corso</h3>
+                        ${preventiveData.school ? `<p><strong>Scuola:</strong> ${preventiveData.school}</p>` : ''}
+                        ${preventiveData.course ? `<p><strong>Corso:</strong> ${preventiveData.course}</p>` : ''}
+                        ${preventiveData.duration ? `<p><strong>Durata:</strong> ${preventiveData.duration} settimane</p>` : ''}
+                        ${preventiveData.startDate ? `<p><strong>Data inizio:</strong> ${preventiveData.startDate}</p>` : ''}
+                    </div>
+                ` : ''}
+                
+                ${preventiveData.accommodation ? `
+                    <div class="preventive-section">
+                        <h3>Alloggio</h3>
+                        <p><strong>Tipo:</strong> ${preventiveData.accommodation}</p>
+                    </div>
+                ` : ''}
+                
+                ${preventiveData.extras.length > 0 ? `
+                    <div class="preventive-section">
+                        <h3>Servizi Extra</h3>
+                        <ul>
+                            ${preventiveData.extras.map(extra => `<li>${extra}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+                
+                ${preventiveData.totalPrice > 0 ? `
+                    <div class="preventive-total">
+                        <h3>Totale Stimato</h3>
+                        <p class="price">${formatPrice(preventiveData.totalPrice)}</p>
+                    </div>
+                ` : ''}
+                
+                ${preventiveData.reasoning.length > 0 ? `
+                    <div class="preventive-reasoning">
+                        <h3>Note e Ragionamento</h3>
+                        <ul>
+                            ${preventiveData.reasoning.slice(-5).map(reason => `<li>${reason}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+            </div>
+            
+            ${!preventiveData.school && !preventiveData.course ? `
+                <div class="preventive-empty">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="opacity: 0.3;">
+                        <path d="M9 11H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-3M9 11V4a2 2 0 012-2h2a2 2 0 012 2v7M9 11h6"></path>
+                    </svg>
+                    <p>Il preventivo verrà compilato man mano che discutiamo delle tue esigenze</p>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    artifactContent.innerHTML = preventiveHTML;
+}
+
+// ===== FUNZIONI ARTIFACT (MODIFICATE) =====
+
+// Copia contenuto artifact
+copyArtifactBtn.addEventListener('click', async () => {
+    let textToCopy = '';
+    
+    if (preventiveData.school || preventiveData.course) {
+        // Copia il preventivo in formato testo
+        textToCopy = 'PREVENTIVO CORSO DI LINGUA\n\n';
+        
+        if (preventiveData.school) textToCopy += `Scuola: ${preventiveData.school}\n`;
+        if (preventiveData.course) textToCopy += `Corso: ${preventiveData.course}\n`;
+        if (preventiveData.duration) textToCopy += `Durata: ${preventiveData.duration} settimane\n`;
+        if (preventiveData.accommodation) textToCopy += `Alloggio: ${preventiveData.accommodation}\n`;
+        if (preventiveData.totalPrice > 0) textToCopy += `\nTotale stimato: ${formatPrice(preventiveData.totalPrice)}\n`;
+        
+        if (preventiveData.reasoning.length > 0) {
+            textToCopy += '\nNote:\n';
+            preventiveData.reasoning.forEach(reason => {
+                textToCopy += `- ${reason}\n`;
+            });
+        }
+    } else {
+        showSnackbar('Nessun preventivo da copiare');
+        return;
+    }
     
     try {
-        await navigator.clipboard.writeText(latestResponse);
+        await navigator.clipboard.writeText(textToCopy);
         
         // Feedback con Font Awesome
         const icon = copyArtifactBtn.querySelector('i');
@@ -239,7 +424,7 @@ copyArtifactBtn.addEventListener('click', async () => {
         icon.className = 'fas fa-check';
         copyArtifactBtn.style.color = 'var(--success)';
         
-        showSnackbar('Contenuto copiato negli appunti!');
+        showSnackbar('Preventivo copiato negli appunti!');
         
         setTimeout(() => {
             icon.className = originalClass;
@@ -253,17 +438,24 @@ copyArtifactBtn.addEventListener('click', async () => {
 
 // Pulisci artifact
 clearArtifactBtn.addEventListener('click', () => {
-    if (artifactResponses.length === 0) return;
-    
-    if (confirm('Vuoi davvero cancellare tutte le risposte salvate?')) {
-        artifactContent.innerHTML = `
-            <div class="artifact-placeholder">
-                <span class="material-icons placeholder-icon">auto_stories</span>
-                <p>Le risposte del chatbot appariranno qui in formato strutturato</p>
-            </div>
-        `;
-        artifactResponses = [];
-        showSnackbar('Artifact pulito');
+    if (preventiveData.school || preventiveData.course || preventiveData.reasoning.length > 0) {
+        if (confirm('Vuoi davvero cancellare il preventivo?')) {
+            // Reset preventivo
+            preventiveData = {
+                school: null,
+                course: null,
+                duration: null,
+                startDate: null,
+                accommodation: null,
+                extras: [],
+                totalPrice: 0,
+                currency: 'GBP',
+                reasoning: []
+            };
+            
+            renderPreventive();
+            showSnackbar('Preventivo cancellato');
+        }
     }
 });
 
@@ -785,6 +977,8 @@ function addMessage(role, content, processInfo = null) {
     
     if (role === 'user') {
         contentDiv.textContent = content;
+        // Aggiorna preventivo con input utente
+        updatePreventive(content, true);
     } else {
         if (typeof marked !== 'undefined') {
             try {
@@ -797,10 +991,9 @@ function addMessage(role, content, processInfo = null) {
             contentDiv.innerHTML = content.replace(/\n/g, '<br>');
         }
         
-        // Se è un messaggio dell'assistente, aggiungilo anche all'artifact
+        // Se è un messaggio dell'assistente con informazioni sui corsi, aggiorna il preventivo
         if (!content.includes('📤') && !content.includes('✅') && !content.includes('❌')) {
-            // Non aggiungere messaggi di sistema all'artifact
-            addToArtifact(content);
+            updatePreventive(content, false);
         }
     }
     
@@ -912,6 +1105,21 @@ function clearChat() {
     chatContainer.innerHTML = '';
     sessionId = generateSessionId();
     localStorage.setItem('chatSessionId', sessionId);
+    
+    // Reset anche il preventivo quando si pulisce la chat
+    preventiveData = {
+        school: null,
+        course: null,
+        duration: null,
+        startDate: null,
+        accommodation: null,
+        extras: [],
+        totalPrice: 0,
+        currency: 'GBP',
+        reasoning: []
+    };
+    renderPreventive();
+    
     addMessage('assistant', '✨ **Nuova conversazione iniziata.** Come posso aiutarti?');
 }
 
@@ -931,6 +1139,9 @@ window.addEventListener('load', () => {
         console.warn('⚠️ marked.js non è caricato. Il rendering del markdown non sarà disponibile.');
     }
     
+    // Inizializza il preventivo vuoto
+    renderPreventive();
+    
     addMessage('assistant', 
         '# Ciao! 👋\n\n' +
         'Sono il chatbot per informazioni su **scuole di lingua**.\n\n' +
@@ -939,7 +1150,7 @@ window.addEventListener('load', () => {
         '• **Opzioni di alloggio**\n' +
         '• **Date e disponibilità**\n' +
         '• **Transfer aeroportuali**\n\n' +
-        '💡 **Puoi caricare documenti PDF** usando il pulsante verde accanto all\'area di input! I documenti verranno elaborati e aggiunti al database per arricchire le mie risposte.\n\n' +
+        '💡 **Mentre parliamo, compilerò un preventivo personalizzato** che vedrai sulla destra!\n\n' +
         '*Cosa vorresti sapere?*'
     );
     
