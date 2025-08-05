@@ -66,8 +66,43 @@ let tempFolderFiles = [];
 
 let activeJobs = new Map();
 
-// NUOVO: Variabile per il preventivo dal backend
-let currentQuote = null;
+let currentQuote = {
+    session_id: null,
+    fase: 'esplorazione',
+    stato: 'in_compilazione',
+    costo_totale: 0,
+    valuta: 'GBP',
+    aggiornato: null,
+    dettagli: {
+        // Info base
+        tipo_corso: null,
+        durata_settimane: null,
+        budget_max: null,
+        periodo_preferito: null,
+        destinazione: null,
+        livello_lingua: null,
+        
+        // Scelta confermata
+        scuola: null,
+        corso_specifico: null,
+        prezzo_base: null,
+        data_inizio: null,
+        
+        // Opzioni specifiche
+        alloggio: null,
+        alloggio_costo: null,
+        transfer: null,
+        transfer_costo: null,
+        assicurazione: null,
+        assicurazione_costo: null,
+        materiali: null,
+        materiali_costo: null,
+        
+        // Opzioni aggiuntive dinamiche
+        opzioni: {}
+    },
+    prossimi_passi: []
+};
 
 // ===== FUNZIONI MATERIAL DESIGN =====
 
@@ -167,8 +202,20 @@ function updateQuoteFromBackend(quoteInfo) {
         return;
     }
     
-    currentQuote = quoteInfo;
-    renderQuoteFromBackend();
+    currentQuote = {
+        session_id: quoteInfo.session_id || sessionId,
+        fase: quoteInfo.fase || 'esplorazione',
+        stato: quoteInfo.stato || 'in_compilazione',
+        costo_totale: quoteInfo.costo_totale || 0,
+        valuta: quoteInfo.valuta || 'GBP',
+        aggiornato: quoteInfo.aggiornato,
+        dettagli: {
+            ...currentQuote.dettagli,
+            ...quoteInfo.dettagli
+        },
+        prossimi_passi: quoteInfo.prossimi_passi || []
+    };
+    renderCompleteQuote();
     
     console.log('💰 Preventivo aggiornato:', {
         fase: quoteInfo.fase,
@@ -177,65 +224,291 @@ function updateQuoteFromBackend(quoteInfo) {
     });
 }
 
-// Renderizza il preventivo basandosi sui dati del backend
-function renderQuoteFromBackend() {
-    if (!currentQuote) {
-        renderEmptyQuote();
-        return;
-    }
-    
-    const quote = currentQuote;
-    const dettagli = quote.dettagli || {};
-    
-    // Mappa delle fasi in italiano
-    const phaseNames = {
-        'esplorazione': 'Raccolta Informazioni',
-        'selezione': 'Selezione Corso',
-        'personalizzazione': 'Personalizzazione',
-        'completato': 'Preventivo Completo'
+function renderCompleteQuote() {
+    const phaseEmojis = {
+        'esplorazione': '🔍',
+        'selezione': '🎯', 
+        'personalizzazione': '⚙️',
+        'completato': '✅'
     };
     
-    const quoteHTML = `
-        <div class="preventive-container">
-            <div class="preventive-header">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
-                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path>
-                </svg>
-                <div>
-                    <h2>Preventivo Personalizzato</h2>
-                    <p class="quote-phase">Fase: ${phaseNames[quote.fase] || quote.fase}</p>
+    const phaseNames = {
+        'esplorazione': 'Raccolta Informazioni',
+        'selezione': 'Selezione Opzioni',
+        'personalizzazione': 'Personalizzazione',
+        'completato': 'Preventivo Completato'
+    };
+    
+    let html = `
+        <div class="quote-container">
+            <!-- Header con fase attuale -->
+            <div class="quote-header">
+                <div class="quote-phase">
+                    <span class="phase-emoji">${phaseEmojis[currentQuote.fase] || '📋'}</span>
+                    <div class="phase-info">
+                        <h2>Preventivo Personalizzato</h2>
+                        <p class="phase-name">${phaseNames[currentQuote.fase] || 'In corso'}</p>
+                    </div>
+                </div>
+                <div class="quote-status ${currentQuote.stato}">
+                    ${currentQuote.stato === 'completato' ? '✅' : '⏳'}
                 </div>
             </div>
             
-            <div class="preventive-content">
-                ${renderQuoteDetails(dettagli)}
-                
-                ${quote.costo_totale > 0 ? `
-                    <div class="preventive-total">
-                        <h3>Totale Stimato</h3>
-                        <p class="price">${formatPrice(quote.costo_totale, quote.valuta)}</p>
-                        <p class="price-note">*Preventivo indicativo</p>
-                    </div>
-                ` : ''}
-                
-                ${quote.prossimi_passi && quote.prossimi_passi.length > 0 ? `
-                    <div class="preventive-next-steps">
-                        <h3>Prossimi Passi</h3>
-                        <ul>
-                            ${quote.prossimi_passi.map(step => `<li>${step}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-                
-                <div class="quote-meta">
-                    <small>Aggiornato: ${formatDateTime(quote.aggiornato)}</small>
+            <!-- Progress Bar -->
+            <div class="quote-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${getProgressPercentage()}%"></div>
                 </div>
+                <span class="progress-text">${getProgressPercentage()}% completato</span>
+            </div>
+    `;
+    
+    // Sezione Info Base
+    if (hasBaseInfo()) {
+        html += `
+            <div class="quote-section">
+                <h3><i class="fas fa-graduation-cap"></i> Informazioni Base</h3>
+                <div class="info-grid">
+                    ${createInfoItem('Tipo Corso', currentQuote.dettagli.tipo_corso, 'fas fa-book')}
+                    ${createInfoItem('Durata', currentQuote.dettagli.durata_settimane ? `${currentQuote.dettagli.durata_settimane} settimane` : null, 'fas fa-calendar')}
+                    ${createInfoItem('Budget Max', currentQuote.dettagli.budget_max ? formatPrice(currentQuote.dettagli.budget_max) : null, 'fas fa-pound-sign')}
+                    ${createInfoItem('Periodo', currentQuote.dettagli.periodo_preferito, 'fas fa-clock')}
+                    ${createInfoItem('Destinazione', currentQuote.dettagli.destinazione, 'fas fa-map-marker-alt')}
+                    ${createInfoItem('Livello', currentQuote.dettagli.livello_lingua, 'fas fa-chart-line')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Sezione Scelta Confermata
+    if (hasConfirmedSelection()) {
+        html += `
+            <div class="quote-section confirmed">
+                <h3><i class="fas fa-check-circle"></i> Scelta Confermata</h3>
+                <div class="selection-card">
+                    <div class="school-info">
+                        <h4>${currentQuote.dettagli.scuola}</h4>
+                        <p>${currentQuote.dettagli.corso_specifico || 'Corso selezionato'}</p>
+                    </div>
+                    <div class="price-info">
+                        <span class="base-price">${formatPrice(currentQuote.dettagli.prezzo_base)}</span>
+                        <span class="duration">${currentQuote.dettagli.durata_settimane} settimane</span>
+                    </div>
+                </div>
+                ${currentQuote.dettagli.data_inizio ? `
+                    <div class="start-date">
+                        <i class="fas fa-calendar-start"></i>
+                        Inizio: ${currentQuote.dettagli.data_inizio}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // Sezione Servizi Extra
+    if (hasExtraServices()) {
+        html += `
+            <div class="quote-section">
+                <h3><i class="fas fa-plus-circle"></i> Servizi Extra</h3>
+                <div class="extras-list">
+                    ${createExtraItem('Alloggio', currentQuote.dettagli.alloggio, currentQuote.dettagli.alloggio_costo, 'fas fa-home')}
+                    ${createExtraItem('Transfer', currentQuote.dettagli.transfer, currentQuote.dettagli.transfer_costo, 'fas fa-plane')}
+                    ${createExtraItem('Assicurazione', currentQuote.dettagli.assicurazione, currentQuote.dettagli.assicurazione_costo, 'fas fa-shield-alt')}
+                    ${createExtraItem('Materiali', currentQuote.dettagli.materiali, currentQuote.dettagli.materiali_costo, 'fas fa-books')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Sezione Costo Totale
+    if (currentQuote.costo_totale > 0) {
+        html += `
+            <div class="quote-total">
+                <div class="total-header">
+                    <h3>Costo Totale</h3>
+                    <div class="total-price">${formatPrice(currentQuote.costo_totale)}</div>
+                </div>
+                <div class="total-breakdown">
+                    <div class="breakdown-item">
+                        <span>Corso base</span>
+                        <span>${formatPrice(currentQuote.dettagli.prezzo_base || 0)}</span>
+                    </div>
+                    ${getExtrasCosts().map(extra => `
+                        <div class="breakdown-item">
+                            <span>${extra.name}</span>
+                            <span>${formatPrice(extra.cost)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Sezione Prossimi Passi
+    if (currentQuote.prossimi_passi && currentQuote.prossimi_passi.length > 0) {
+        html += `
+            <div class="quote-section next-steps">
+                <h3><i class="fas fa-list-check"></i> Prossimi Passi</h3>
+                <div class="steps-list">
+                    ${currentQuote.prossimi_passi.map((step, index) => `
+                        <div class="step-item">
+                            <span class="step-number">${index + 1}</span>
+                            <span class="step-text">${step}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Stato vuoto
+    if (!hasAnyInfo()) {
+        html += `
+            <div class="quote-empty">
+                <div class="empty-icon">
+                    <i class="fas fa-calculator"></i>
+                </div>
+                <h3>Iniziamo il tuo preventivo!</h3>
+                <p>Dimmi cosa stai cercando e creeremo insieme il preventivo perfetto per te.</p>
+                <div class="quick-starts">
+                    <button class="quick-start-btn" onclick="quickStart('ielts')">
+                        <i class="fas fa-certificate"></i>
+                        Corso IELTS
+                    </button>
+                    <button class="quick-start-btn" onclick="quickStart('general')">
+                        <i class="fas fa-globe"></i>
+                        General English
+                    </button>
+                    <button class="quick-start-btn" onclick="quickStart('business')">
+                        <i class="fas fa-briefcase"></i>
+                        Business English
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Footer con timestamp
+    if (currentQuote.aggiornato) {
+        html += `
+            <div class="quote-footer">
+                <small>
+                    <i class="fas fa-clock"></i>
+                    Aggiornato: ${formatTimestamp(currentQuote.aggiornato)}
+                </small>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    
+    artifactContent.innerHTML = html;
+}
+
+// Funzioni helper
+function hasBaseInfo() {
+    const d = currentQuote.dettagli;
+    return d.tipo_corso || d.durata_settimane || d.budget_max || 
+           d.periodo_preferito || d.destinazione || d.livello_lingua;
+}
+
+function hasConfirmedSelection() {
+    const d = currentQuote.dettagli;
+    return d.scuola && d.corso_specifico;
+}
+
+function hasExtraServices() {
+    const d = currentQuote.dettagli;
+    return d.alloggio || d.transfer || d.assicurazione || d.materiali;
+}
+
+function hasAnyInfo() {
+    return hasBaseInfo() || hasConfirmedSelection() || hasExtraServices() || currentQuote.costo_totale > 0;
+}
+
+function getProgressPercentage() {
+    let progress = 0;
+    const d = currentQuote.dettagli;
+    
+    // Info base (40%)
+    const baseFields = [d.tipo_corso, d.durata_settimane, d.destinazione];
+    progress += (baseFields.filter(f => f).length / baseFields.length) * 40;
+    
+    // Scelta confermata (40%)
+    if (d.scuola && d.corso_specifico) progress += 40;
+    
+    // Servizi extra (20%)
+    const extraFields = [d.alloggio, d.transfer, d.assicurazione];
+    progress += (extraFields.filter(f => f !== null).length / extraFields.length) * 20;
+    
+    return Math.round(progress);
+}
+
+function createInfoItem(label, value, icon) {
+    if (!value) return '';
+    return `
+        <div class="info-item">
+            <i class="${icon}"></i>
+            <div class="info-content">
+                <span class="info-label">${label}</span>
+                <span class="info-value">${value}</span>
             </div>
         </div>
     `;
+}
+
+function createExtraItem(name, description, cost, icon) {
+    if (!description && !cost) return '';
+    return `
+        <div class="extra-item">
+            <i class="${icon}"></i>
+            <div class="extra-content">
+                <span class="extra-name">${name}</span>
+                <span class="extra-desc">${description || 'Da definire'}</span>
+            </div>
+            <div class="extra-cost">
+                ${cost ? formatPrice(cost) : ''}
+            </div>
+        </div>
+    `;
+}
+
+function getExtrasCosts() {
+    const extras = [];
+    const d = currentQuote.dettagli;
     
-    artifactContent.innerHTML = quoteHTML;
+    if (d.alloggio_costo) extras.push({name: 'Alloggio', cost: d.alloggio_costo});
+    if (d.transfer_costo) extras.push({name: 'Transfer', cost: d.transfer_costo});
+    if (d.assicurazione_costo) extras.push({name: 'Assicurazione', cost: d.assicurazione_costo});
+    if (d.materiali_costo) extras.push({name: 'Materiali', cost: d.materiali_costo});
+    
+    return extras;
+}
+
+function formatPrice(price) {
+    if (!price) return '';
+    return `${currentQuote.valuta === 'EUR' ? '€' : '£'}${price.toLocaleString()}`;
+}
+
+function formatTimestamp(timestamp) {
+    return new Date(timestamp).toLocaleString('it-IT', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function quickStart(type) {
+    const messages = {
+        'ielts': 'Voglio informazioni sui corsi IELTS',
+        'general': 'Mi interessano i corsi di General English',
+        'business': 'Cerco un corso di Business English'
+    };
+    
+    messageInput.value = messages[type];
+    sendMessage();
 }
 
 // Renderizza i dettagli del preventivo
@@ -368,27 +641,8 @@ function formatDateTime(dateString) {
 copyArtifactBtn.addEventListener('click', async () => {
     let textToCopy = '';
     
-    if (currentQuote && (currentQuote.dettagli.scuola || currentQuote.dettagli.tipo_corso)) {
-        // Copia il preventivo in formato testo
-        textToCopy = 'PREVENTIVO CORSO DI LINGUA\n\n';
-        
-        const dettagli = currentQuote.dettagli;
-        
-        if (dettagli.scuola) textToCopy += `Scuola: ${dettagli.scuola}\n`;
-        if (dettagli.tipo_corso) textToCopy += `Corso: ${dettagli.tipo_corso}\n`;
-        if (dettagli.durata_settimane) textToCopy += `Durata: ${dettagli.durata_settimane} settimane\n`;
-        if (dettagli.destinazione) textToCopy += `Destinazione: ${dettagli.destinazione}\n`;
-        if (currentQuote.costo_totale > 0) textToCopy += `\nTotale stimato: ${formatPrice(currentQuote.costo_totale, currentQuote.valuta)}\n`;
-        
-        textToCopy += `\nFase: ${currentQuote.fase}\n`;
-        textToCopy += `Aggiornato: ${formatDateTime(currentQuote.aggiornato)}\n`;
-        
-        if (currentQuote.prossimi_passi && currentQuote.prossimi_passi.length > 0) {
-            textToCopy += '\nProssimi passi:\n';
-            currentQuote.prossimi_passi.forEach(step => {
-                textToCopy += `- ${step}\n`;
-            });
-        }
+    if (hasAnyInfo()) {
+        textToCopy = generateQuoteText();
     } else {
         showSnackbar('Nessun preventivo da copiare');
         return;
@@ -397,7 +651,7 @@ copyArtifactBtn.addEventListener('click', async () => {
     try {
         await navigator.clipboard.writeText(textToCopy);
         
-        // Feedback con Font Awesome
+        // Feedback visivo
         const icon = copyArtifactBtn.querySelector('i');
         const originalClass = icon.className;
         icon.className = 'fas fa-check';
@@ -415,27 +669,131 @@ copyArtifactBtn.addEventListener('click', async () => {
     }
 });
 
+function generateQuoteText() {
+    const phaseNames = {
+        'esplorazione': 'Raccolta Informazioni',
+        'selezione': 'Selezione Opzioni', 
+        'personalizzazione': 'Personalizzazione',
+        'completato': 'Preventivo Completato'
+    };
+    
+    let text = '=== PREVENTIVO CORSO DI LINGUA ===\n\n';
+    
+    // Header
+    text += `Stato: ${phaseNames[currentQuote.fase] || currentQuote.fase}\n`;
+    text += `Progresso: ${getProgressPercentage()}% completato\n`;
+    if (currentQuote.aggiornato) {
+        text += `Aggiornato: ${formatTimestamp(currentQuote.aggiornato)}\n`;
+    }
+    text += `Sessione: ${currentQuote.session_id}\n\n`;
+    
+    // Informazioni base
+    if (hasBaseInfo()) {
+        text += '--- INFORMAZIONI BASE ---\n';
+        const d = currentQuote.dettagli;
+        if (d.tipo_corso) text += `Tipo Corso: ${d.tipo_corso}\n`;
+        if (d.durata_settimane) text += `Durata: ${d.durata_settimane} settimane\n`;
+        if (d.budget_max) text += `Budget Max: ${formatPrice(d.budget_max)}\n`;
+        if (d.periodo_preferito) text += `Periodo: ${d.periodo_preferito}\n`;
+        if (d.destinazione) text += `Destinazione: ${d.destinazione}\n`;
+        if (d.livello_lingua) text += `Livello: ${d.livello_lingua}\n`;
+        text += '\n';
+    }
+    
+    // Scelta confermata
+    if (hasConfirmedSelection()) {
+        text += '--- SCELTA CONFERMATA ---\n';
+        const d = currentQuote.dettagli;
+        text += `Scuola: ${d.scuola}\n`;
+        if (d.corso_specifico) text += `Corso: ${d.corso_specifico}\n`;
+        if (d.prezzo_base) text += `Prezzo Base: ${formatPrice(d.prezzo_base)}\n`;
+        if (d.durata_settimane) text += `Durata: ${d.durata_settimane} settimane\n`;
+        if (d.data_inizio) text += `Data Inizio: ${d.data_inizio}\n`;
+        text += '\n';
+    }
+    
+    // Servizi extra
+    if (hasExtraServices()) {
+        text += '--- SERVIZI EXTRA ---\n';
+        const d = currentQuote.dettagli;
+        if (d.alloggio) {
+            text += `Alloggio: ${d.alloggio}`;
+            if (d.alloggio_costo) text += ` - ${formatPrice(d.alloggio_costo)}`;
+            text += '\n';
+        }
+        if (d.transfer) {
+            text += `Transfer: ${d.transfer}`;
+            if (d.transfer_costo) text += ` - ${formatPrice(d.transfer_costo)}`;
+            text += '\n';
+        }
+        if (d.assicurazione) {
+            text += `Assicurazione: ${d.assicurazione}`;
+            if (d.assicurazione_costo) text += ` - ${formatPrice(d.assicurazione_costo)}`;
+            text += '\n';
+        }
+        if (d.materiali) {
+            text += `Materiali: ${d.materiali}`;
+            if (d.materiali_costo) text += ` - ${formatPrice(d.materiali_costo)}`;
+            text += '\n';
+        }
+        text += '\n';
+    }
+    
+    // Costo totale
+    if (currentQuote.costo_totale > 0) {
+        text += '--- COSTO TOTALE ---\n';
+        text += `TOTALE: ${formatPrice(currentQuote.costo_totale)}\n\n`;
+        
+        // Dettaglio costi
+        text += 'Dettaglio:\n';
+        if (currentQuote.dettagli.prezzo_base) {
+            text += `• Corso base: ${formatPrice(currentQuote.dettagli.prezzo_base)}\n`;
+        }
+        const extras = getExtrasCosts();
+        extras.forEach(extra => {
+            text += `• ${extra.name}: ${formatPrice(extra.cost)}\n`;
+        });
+        text += '\n';
+    }
+    
+    // Prossimi passi
+    if (currentQuote.prossimi_passi && currentQuote.prossimi_passi.length > 0) {
+        text += '--- PROSSIMI PASSI ---\n';
+        currentQuote.prossimi_passi.forEach((step, index) => {
+            text += `${index + 1}. ${step}\n`;
+        });
+        text += '\n';
+    }
+    
+    text += '=== FINE PREVENTIVO ===\n';
+    text += `Generato il ${new Date().toLocaleString('it-IT')}\n`;
+    
+    return text;
+}
+
 // Pulisci artifact
-clearArtifactBtn.addEventListener('click', async () => {
-    if (currentQuote && (currentQuote.dettagli.scuola || currentQuote.dettagli.tipo_corso || currentQuote.costo_totale > 0)) {
-        if (confirm('Vuoi davvero cancellare il preventivo?')) {
-            try {
-                // Chiama API per cancellare preventivo
-                const response = await fetch(`${API_URL}/quote/${sessionId}`, {
-                    method: 'DELETE'
-                });
-                
-                if (response.ok) {
-                    currentQuote = null;
-                    renderEmptyQuote();
-                    showSnackbar('Preventivo cancellato');
-                } else {
-                    throw new Error('Errore nella cancellazione');
-                }
-            } catch (error) {
-                console.error('Errore cancellazione preventivo:', error);
-                showSnackbar('Errore nella cancellazione del preventivo');
-            }
+clearArtifactBtn.addEventListener('click', () => {
+    if (hasAnyInfo()) {
+        if (confirm('Vuoi davvero cancellare il preventivo attuale?')) {
+            // Reset preventivo completo
+            currentQuote = {
+                session_id: sessionId,
+                fase: 'esplorazione',
+                stato: 'in_compilazione',
+                costo_totale: 0,
+                valuta: 'GBP',
+                aggiornato: null,
+                dettagli: {},
+                prossimi_passi: []
+            };
+            
+            renderCompleteQuote();
+            showSnackbar('Preventivo cancellato');
+            
+            // Chiama anche il backend per cancellare dal database
+            fetch(`${API_URL}/quote/${sessionId}`, {
+                method: 'DELETE'
+            }).catch(e => console.warn('Errore cancellazione backend:', e));
         }
     }
 });
@@ -1010,7 +1368,6 @@ async function sendMessage() {
     try {
         await new Promise(resolve => setTimeout(resolve, 800));
         
-        // CHIAMATA API AGGIORNATA
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
@@ -1047,11 +1404,9 @@ async function sendMessage() {
         const processInfo = `Ho utilizzato ${totalChunks} chunks dal database per questa risposta.`;
         addMessage('assistant', data.message, processInfo);
 
-        // NUOVO: Aggiorna preventivo se presente
         if (data.quote_info) {
             updateQuoteFromBackend(data.quote_info);
             
-            // Se il preventivo è stato aggiornato, mostra una notifica discreta
             if (data.quote_updated) {
                 showSnackbar('💰 Preventivo aggiornato!', 2000);
             }
@@ -1086,22 +1441,27 @@ async function sendMessage() {
 }
 
 // Pulisci chat e inizia nuova conversazione
-async function clearChat() {
+function clearChat() {
     chatContainer.innerHTML = '';
     sessionId = generateSessionId();
     localStorage.setItem('chatSessionId', sessionId);
     
-    // NUOVO: Reset anche del preventivo via API
-    try {
-        await fetch(`${API_URL}/quote/${sessionId}`, { method: 'DELETE' });
-    } catch (error) {
-        console.log('Nessun preventivo da cancellare');
-    }
+    // Reset del preventivo completo
+    currentQuote = {
+        session_id: sessionId,
+        fase: 'esplorazione',
+        stato: 'in_compilazione',
+        costo_totale: 0,
+        valuta: 'GBP',
+        aggiornato: null,
+        dettagli: {},
+        prossimi_passi: []
+    };
     
-    currentQuote = null;
-    renderEmptyQuote();
+    renderCompleteQuote();
     
-    addMessage('assistant', '✨ **Nuova conversazione iniziata.** Come posso aiutarti con i corsi di lingua?');
+    addMessage('assistant', '✨ **Nuova conversazione iniziata.** Come posso aiutarti?');
+    showSnackbar('Nuova sessione avviata');
 }
 
 // Event listeners
@@ -1121,25 +1481,16 @@ window.addEventListener('load', () => {
     }
     
     // Inizializza il preventivo vuoto
-    renderEmptyQuote();
+    currentQuote.session_id = sessionId;
+    renderCompleteQuote();
     
     addMessage('assistant', 
-        '# Ciao! 👋\n\n' +
-        'Sono il chatbot per informazioni su **scuole di lingua**.\n\n' +
-        'Posso aiutarti con:\n' +
-        '• **Prezzi dei corsi**\n' +
-        '• **Opzioni di alloggio**\n' +
-        '• **Date e disponibilità**\n' +
-        '• **Transfer aeroportuali**\n\n' +
-        '💡 **Mentre parliamo, compilerò automaticamente un preventivo personalizzato** che vedrai sulla destra!\n\n' +
-        '*Dimmi: che tipo di corso ti interessa?*'
+        '# Ciao!\n\n' +
+        'Sono il tuo consulente personale per **corsi di lingua all\'estero**.\n\n' +
+        '*Dimmi, cosa stai cercando?*'
     );
     
-    if (API_URL === 'http://localhost:8000') {
-        console.warn('⚠️ Stai usando localhost. Ricorda di cambiare API_URL per la produzione!');
-    }
 });
-
 // Gestione focus automatico
 document.addEventListener('DOMContentLoaded', () => {
     messageInput.focus();
