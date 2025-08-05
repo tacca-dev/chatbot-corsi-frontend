@@ -78,7 +78,7 @@ let preventiveData = {
     accommodation: null,
     extras: [],
     totalPrice: 0,
-    currency: 'GBP',
+    currency: '£',
     reasoning: []
 };
 
@@ -183,10 +183,10 @@ function extractCourseInfo(message) {
         dates: []
     };
     
-    // Pattern per prezzi (£, GBP, euro, €)
+    // Pattern per prezzi (£, £, euro, €)
     const pricePatterns = [
         /£(\d+(?:,\d{3})*(?:\.\d{2})?)/g,
-        /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:GBP|pounds?|sterline)/gi,
+        /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:£|pounds?|sterline|£)/gi,
         /€(\d+(?:,\d{3})*(?:\.\d{2})?)/g,
         /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:EUR|euro)/gi
     ];
@@ -449,7 +449,7 @@ clearArtifactBtn.addEventListener('click', () => {
                 accommodation: null,
                 extras: [],
                 totalPrice: 0,
-                currency: 'GBP',
+                currency: '£',
                 reasoning: []
             };
             
@@ -1115,7 +1115,7 @@ function clearChat() {
         accommodation: null,
         extras: [],
         totalPrice: 0,
-        currency: 'GBP',
+        currency: '£',
         reasoning: []
     };
     renderPreventive();
