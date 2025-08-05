@@ -66,21 +66,8 @@ let tempFolderFiles = [];
 
 let activeJobs = new Map();
 
-// Storage per le risposte dell'artifact
-let artifactResponses = [];
-
-// Struttura per il preventivo
-let preventiveData = {
-    school: null,
-    course: null,
-    duration: null,
-    startDate: null,
-    accommodation: null,
-    extras: [],
-    totalPrice: 0,
-    currency: '£',
-    reasoning: []
-};
+// NUOVO: Variabile per il preventivo dal backend
+let currentQuote = null;
 
 // ===== FUNZIONI MATERIAL DESIGN =====
 
@@ -159,7 +146,7 @@ toggleArtifactBtn.addEventListener('click', () => {
     chatSection.classList.toggle('fullwidth');
     
     const message = artifactSection.classList.contains('hidden') ? 
-        'Pannello artifact nascosto' : 'Pannello artifact visibile';
+        'Pannello preventivo nascosto' : 'Pannello preventivo visibile';
     showSnackbar(message);
 });
 
@@ -167,160 +154,155 @@ toggleArtifactBtn.addEventListener('click', () => {
 closeArtifactBtn.addEventListener('click', () => {
     artifactSection.classList.add('hidden');
     chatSection.classList.add('fullwidth');
-    showSnackbar('Pannello artifact chiuso');
+    showSnackbar('Pannello preventivo chiuso');
 });
 
-// ===== FUNZIONI PREVENTIVO =====
+// ===== NUOVE FUNZIONI PREVENTIVO =====
 
-// Estrai informazioni dal messaggio del chatbot
-function extractCourseInfo(message) {
-    const info = {
-        prices: [],
-        durations: [],
-        courses: [],
-        accommodations: [],
-        schools: [],
-        dates: []
-    };
-    
-    // Pattern per prezzi (£, £, euro, €)
-    const pricePatterns = [
-        /£(\d+(?:,\d{3})*(?:\.\d{2})?)/g,
-        /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:£|pounds?|sterline|£)/gi,
-        /€(\d+(?:,\d{3})*(?:\.\d{2})?)/g,
-        /(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:EUR|euro)/gi
-    ];
-    
-    pricePatterns.forEach(pattern => {
-        let match;
-        while ((match = pattern.exec(message)) !== null) {
-            const price = parseFloat(match[1].replace(/,/g, ''));
-            if (!isNaN(price)) {
-                info.prices.push(price);
-            }
-        }
-    });
-    
-    // Pattern per durate
-    const durationPattern = /(\d+)\s*(?:week|settiman|sett\.)/gi;
-    let match;
-    while ((match = durationPattern.exec(message)) !== null) {
-        info.durations.push(parseInt(match[1]));
-    }
-    
-    // Pattern per corsi comuni
-    const coursePatterns = [
-        /IELTS/gi,
-        /General English/gi,
-        /Business English/gi,
-        /Cambridge/gi,
-        /Intensive/gi,
-        /Standard/gi
-    ];
-    
-    coursePatterns.forEach(pattern => {
-        if (pattern.test(message)) {
-            info.courses.push(pattern.source.replace(/\\/g, ''));
-        }
-    });
-    
-    // Pattern per alloggi
-    const accommodationPatterns = [
-        /homestay/gi,
-        /residence/gi,
-        /shared flat/gi,
-        /student house/gi,
-        /host family/gi
-    ];
-    
-    accommodationPatterns.forEach(pattern => {
-        if (pattern.test(message)) {
-            info.accommodations.push(pattern.source.replace(/\\/g, ''));
-        }
-    });
-    
-    // Pattern per scuole
-    const schoolPatterns = [
-        /BELS/g,
-        /CIAL/g,
-        /KSOE/g,
-        /Kings/g,
-        /ELC/g
-    ];
-    
-    schoolPatterns.forEach(pattern => {
-        if (pattern.test(message)) {
-            info.schools.push(pattern.source);
-        }
-    });
-    
-    return info;
-}
-
-// Aggiorna il preventivo basandosi sulle informazioni estratte
-function updatePreventive(message, isUserMessage = false) {
-    if (isUserMessage) {
-        // Analizza richieste dell'utente
-        if (/budget|economico|cheap|risparmio/i.test(message)) {
-            preventiveData.reasoning.push("L'utente ha espresso interesse per opzioni economiche");
-        }
-        if (/intensiv|rapido|veloce/i.test(message)) {
-            preventiveData.reasoning.push("L'utente preferisce un corso intensivo");
-        }
+// Aggiorna il preventivo con i dati dal backend
+function updateQuoteFromBackend(quoteInfo) {
+    if (!quoteInfo) {
+        currentQuote = null;
+        renderEmptyQuote();
         return;
     }
     
-    // Estrai informazioni dalla risposta del bot
-    const info = extractCourseInfo(message);
+    currentQuote = quoteInfo;
+    renderQuoteFromBackend();
     
-    // Aggiorna scuola
-    if (info.schools.length > 0 && !preventiveData.school) {
-        preventiveData.school = info.schools[0];
-        preventiveData.reasoning.push(`Scuola selezionata: ${info.schools[0]}`);
+    console.log('💰 Preventivo aggiornato:', {
+        fase: quoteInfo.fase,
+        costo: quoteInfo.costo_totale,
+        dettagli: Object.keys(quoteInfo.dettagli).length
+    });
+}
+
+// Renderizza il preventivo basandosi sui dati del backend
+function renderQuoteFromBackend() {
+    if (!currentQuote) {
+        renderEmptyQuote();
+        return;
     }
     
-    // Aggiorna corso
-    if (info.courses.length > 0 && !preventiveData.course) {
-        preventiveData.course = info.courses[0];
-        preventiveData.reasoning.push(`Tipo di corso: ${info.courses[0]}`);
+    const quote = currentQuote;
+    const dettagli = quote.dettagli || {};
+    
+    // Mappa delle fasi in italiano
+    const phaseNames = {
+        'esplorazione': 'Raccolta Informazioni',
+        'selezione': 'Selezione Corso',
+        'personalizzazione': 'Personalizzazione',
+        'completato': 'Preventivo Completo'
+    };
+    
+    const quoteHTML = `
+        <div class="preventive-container">
+            <div class="preventive-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"></path>
+                </svg>
+                <div>
+                    <h2>Preventivo Personalizzato</h2>
+                    <p class="quote-phase">Fase: ${phaseNames[quote.fase] || quote.fase}</p>
+                </div>
+            </div>
+            
+            <div class="preventive-content">
+                ${renderQuoteDetails(dettagli)}
+                
+                ${quote.costo_totale > 0 ? `
+                    <div class="preventive-total">
+                        <h3>Totale Stimato</h3>
+                        <p class="price">${formatPrice(quote.costo_totale, quote.valuta)}</p>
+                        <p class="price-note">*Preventivo indicativo</p>
+                    </div>
+                ` : ''}
+                
+                ${quote.prossimi_passi && quote.prossimi_passi.length > 0 ? `
+                    <div class="preventive-next-steps">
+                        <h3>Prossimi Passi</h3>
+                        <ul>
+                            ${quote.prossimi_passi.map(step => `<li>${step}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+                
+                <div class="quote-meta">
+                    <small>Aggiornato: ${formatDateTime(quote.aggiornato)}</small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    artifactContent.innerHTML = quoteHTML;
+}
+
+// Renderizza i dettagli del preventivo
+function renderQuoteDetails(dettagli) {
+    let sectionsHTML = '';
+    
+    // Sezione corso
+    if (dettagli.tipo_corso || dettagli.durata_settimane || dettagli.destinazione) {
+        sectionsHTML += `
+            <div class="preventive-section">
+                <h3>Dettagli Corso</h3>
+                ${dettagli.tipo_corso ? `<p><strong>Tipo:</strong> ${dettagli.tipo_corso}</p>` : ''}
+                ${dettagli.durata_settimane ? `<p><strong>Durata:</strong> ${dettagli.durata_settimane} settimane</p>` : ''}
+                ${dettagli.destinazione ? `<p><strong>Destinazione:</strong> ${dettagli.destinazione}</p>` : ''}
+                ${dettagli.budget_max ? `<p><strong>Budget max:</strong> ${formatPrice(dettagli.budget_max, currentQuote.valuta)}</p>` : ''}
+            </div>
+        `;
     }
     
-    // Aggiorna durata
-    if (info.durations.length > 0 && !preventiveData.duration) {
-        preventiveData.duration = Math.max(...info.durations);
-        preventiveData.reasoning.push(`Durata corso: ${preventiveData.duration} settimane`);
+    // Sezione scuola confermata
+    if (dettagli.scuola) {
+        sectionsHTML += `
+            <div class="preventive-section confirmed">
+                <h3>Scuola Selezionata</h3>
+                <p><strong>Scuola:</strong> ${dettagli.scuola}</p>
+                ${dettagli.corso_specifico ? `<p><strong>Corso:</strong> ${dettagli.corso_specifico}</p>` : ''}
+                ${dettagli.prezzo_base ? `<p><strong>Prezzo base:</strong> ${formatPrice(dettagli.prezzo_base, currentQuote.valuta)}</p>` : ''}
+            </div>
+        `;
     }
     
-    // Aggiorna alloggio
-    if (info.accommodations.length > 0 && !preventiveData.accommodation) {
-        preventiveData.accommodation = info.accommodations[0];
-        preventiveData.reasoning.push(`Alloggio: ${info.accommodations[0]}`);
+    // Sezione opzioni specifiche
+    if (dettagli.opzioni && Object.keys(dettagli.opzioni).length > 0) {
+        sectionsHTML += `
+            <div class="preventive-section">
+                <h3>Opzioni Aggiuntive</h3>
+                ${renderQuoteOptions(dettagli.opzioni)}
+            </div>
+        `;
     }
     
-    // Aggiorna prezzo (prendi il più alto trovato come stima)
-    if (info.prices.length > 0) {
-        const maxPrice = Math.max(...info.prices);
-        if (maxPrice > preventiveData.totalPrice) {
-            preventiveData.totalPrice = maxPrice;
-            preventiveData.reasoning.push(`Prezzo aggiornato: ${formatPrice(maxPrice)}`);
+    return sectionsHTML;
+}
+
+// Renderizza le opzioni del preventivo
+function renderQuoteOptions(opzioni) {
+    let optionsHTML = '<ul>';
+    
+    for (const [key, value] of Object.entries(opzioni)) {
+        if (typeof value === 'object' && value !== null) {
+            if (value.selezionato) {
+                optionsHTML += `<li class="selected-option">✓ ${key}: ${formatPrice(value.prezzo, currentQuote.valuta)}</li>`;
+            } else {
+                optionsHTML += `<li class="available-option">○ ${key}: ${formatPrice(value.prezzo, currentQuote.valuta)}</li>`;
+            }
+        } else {
+            optionsHTML += `<li>${key}: ${value}</li>`;
         }
     }
     
-    // Renderizza il preventivo aggiornato
-    renderPreventive();
+    optionsHTML += '</ul>';
+    return optionsHTML;
 }
 
-// Formatta il prezzo
-function formatPrice(price) {
-    if (preventiveData.currency === 'EUR') {
-        return `€${price.toFixed(2)}`;
-    }
-    return `£${price.toFixed(2)}`;
-}
-
-// Renderizza il preventivo nell'artifact
-function renderPreventive() {
-    const preventiveHTML = `
+// Renderizza preventivo vuoto
+function renderEmptyQuote() {
+    const emptyHTML = `
         <div class="preventive-container">
             <div class="preventive-header">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
@@ -330,84 +312,81 @@ function renderPreventive() {
                 <h2>Preventivo Personalizzato</h2>
             </div>
             
-            <div class="preventive-content">
-                ${preventiveData.school || preventiveData.course ? `
-                    <div class="preventive-section">
-                        <h3>Dettagli Corso</h3>
-                        ${preventiveData.school ? `<p><strong>Scuola:</strong> ${preventiveData.school}</p>` : ''}
-                        ${preventiveData.course ? `<p><strong>Corso:</strong> ${preventiveData.course}</p>` : ''}
-                        ${preventiveData.duration ? `<p><strong>Durata:</strong> ${preventiveData.duration} settimane</p>` : ''}
-                        ${preventiveData.startDate ? `<p><strong>Data inizio:</strong> ${preventiveData.startDate}</p>` : ''}
-                    </div>
-                ` : ''}
-                
-                ${preventiveData.accommodation ? `
-                    <div class="preventive-section">
-                        <h3>Alloggio</h3>
-                        <p><strong>Tipo:</strong> ${preventiveData.accommodation}</p>
-                    </div>
-                ` : ''}
-                
-                ${preventiveData.extras.length > 0 ? `
-                    <div class="preventive-section">
-                        <h3>Servizi Extra</h3>
-                        <ul>
-                            ${preventiveData.extras.map(extra => `<li>${extra}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-                
-                ${preventiveData.totalPrice > 0 ? `
-                    <div class="preventive-total">
-                        <h3>Totale Stimato</h3>
-                        <p class="price">${formatPrice(preventiveData.totalPrice)}</p>
-                    </div>
-                ` : ''}
-                
-                ${preventiveData.reasoning.length > 0 ? `
-                    <div class="preventive-reasoning">
-                        <h3>Note e Ragionamento</h3>
-                        <ul>
-                            ${preventiveData.reasoning.slice(-5).map(reason => `<li>${reason}</li>`).join('')}
-                        </ul>
-                    </div>
-                ` : ''}
-            </div>
-            
-            ${!preventiveData.school && !preventiveData.course ? `
-                <div class="preventive-empty">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="opacity: 0.3;">
-                        <path d="M9 11H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-3M9 11V4a2 2 0 012-2h2a2 2 0 012 2v7M9 11h6"></path>
-                    </svg>
-                    <p>Il preventivo verrà compilato man mano che discutiamo delle tue esigenze</p>
+            <div class="preventive-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="opacity: 0.3;">
+                    <path d="M9 11H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-3M9 11V4a2 2 0 012-2h2a2 2 0 012 2v7M9 11h6"></path>
+                </svg>
+                <p>Il preventivo verrà compilato automaticamente mentre discutiamo delle tue esigenze per il corso di lingua</p>
+                <div class="quote-tips">
+                    <h4>💡 Suggerimenti:</h4>
+                    <ul>
+                        <li>Dimmi che tipo di corso ti interessa</li>
+                        <li>Specifica per quanto tempo vuoi studiare</li>
+                        <li>Indica la tua destinazione preferita</li>
+                        <li>Fammi sapere il tuo budget orientativo</li>
+                    </ul>
                 </div>
-            ` : ''}
+            </div>
         </div>
     `;
     
-    artifactContent.innerHTML = preventiveHTML;
+    artifactContent.innerHTML = emptyHTML;
 }
 
-// ===== FUNZIONI ARTIFACT (MODIFICATE) =====
+// Formatta il prezzo
+function formatPrice(price, currency = 'GBP') {
+    if (!price || price === 0) return 'N/A';
+    
+    const formatted = parseFloat(price).toFixed(2);
+    if (currency === 'EUR') {
+        return `€${formatted}`;
+    }
+    return `£${formatted}`;
+}
+
+// Formatta data e ora
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+    
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleString('it-IT', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return dateString;
+    }
+}
+
+// ===== FUNZIONI ARTIFACT AGGIORNATE =====
 
 // Copia contenuto artifact
 copyArtifactBtn.addEventListener('click', async () => {
     let textToCopy = '';
     
-    if (preventiveData.school || preventiveData.course) {
+    if (currentQuote && (currentQuote.dettagli.scuola || currentQuote.dettagli.tipo_corso)) {
         // Copia il preventivo in formato testo
         textToCopy = 'PREVENTIVO CORSO DI LINGUA\n\n';
         
-        if (preventiveData.school) textToCopy += `Scuola: ${preventiveData.school}\n`;
-        if (preventiveData.course) textToCopy += `Corso: ${preventiveData.course}\n`;
-        if (preventiveData.duration) textToCopy += `Durata: ${preventiveData.duration} settimane\n`;
-        if (preventiveData.accommodation) textToCopy += `Alloggio: ${preventiveData.accommodation}\n`;
-        if (preventiveData.totalPrice > 0) textToCopy += `\nTotale stimato: ${formatPrice(preventiveData.totalPrice)}\n`;
+        const dettagli = currentQuote.dettagli;
         
-        if (preventiveData.reasoning.length > 0) {
-            textToCopy += '\nNote:\n';
-            preventiveData.reasoning.forEach(reason => {
-                textToCopy += `- ${reason}\n`;
+        if (dettagli.scuola) textToCopy += `Scuola: ${dettagli.scuola}\n`;
+        if (dettagli.tipo_corso) textToCopy += `Corso: ${dettagli.tipo_corso}\n`;
+        if (dettagli.durata_settimane) textToCopy += `Durata: ${dettagli.durata_settimane} settimane\n`;
+        if (dettagli.destinazione) textToCopy += `Destinazione: ${dettagli.destinazione}\n`;
+        if (currentQuote.costo_totale > 0) textToCopy += `\nTotale stimato: ${formatPrice(currentQuote.costo_totale, currentQuote.valuta)}\n`;
+        
+        textToCopy += `\nFase: ${currentQuote.fase}\n`;
+        textToCopy += `Aggiornato: ${formatDateTime(currentQuote.aggiornato)}\n`;
+        
+        if (currentQuote.prossimi_passi && currentQuote.prossimi_passi.length > 0) {
+            textToCopy += '\nProssimi passi:\n';
+            currentQuote.prossimi_passi.forEach(step => {
+                textToCopy += `- ${step}\n`;
             });
         }
     } else {
@@ -437,24 +416,26 @@ copyArtifactBtn.addEventListener('click', async () => {
 });
 
 // Pulisci artifact
-clearArtifactBtn.addEventListener('click', () => {
-    if (preventiveData.school || preventiveData.course || preventiveData.reasoning.length > 0) {
+clearArtifactBtn.addEventListener('click', async () => {
+    if (currentQuote && (currentQuote.dettagli.scuola || currentQuote.dettagli.tipo_corso || currentQuote.costo_totale > 0)) {
         if (confirm('Vuoi davvero cancellare il preventivo?')) {
-            // Reset preventivo
-            preventiveData = {
-                school: null,
-                course: null,
-                duration: null,
-                startDate: null,
-                accommodation: null,
-                extras: [],
-                totalPrice: 0,
-                currency: '£',
-                reasoning: []
-            };
-            
-            renderPreventive();
-            showSnackbar('Preventivo cancellato');
+            try {
+                // Chiama API per cancellare preventivo
+                const response = await fetch(`${API_URL}/quote/${sessionId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    currentQuote = null;
+                    renderEmptyQuote();
+                    showSnackbar('Preventivo cancellato');
+                } else {
+                    throw new Error('Errore nella cancellazione');
+                }
+            } catch (error) {
+                console.error('Errore cancellazione preventivo:', error);
+                showSnackbar('Errore nella cancellazione del preventivo');
+            }
         }
     }
 });
@@ -977,8 +958,6 @@ function addMessage(role, content, processInfo = null) {
     
     if (role === 'user') {
         contentDiv.textContent = content;
-        // Aggiorna preventivo con input utente
-        updatePreventive(content, true);
     } else {
         if (typeof marked !== 'undefined') {
             try {
@@ -989,11 +968,6 @@ function addMessage(role, content, processInfo = null) {
             }
         } else {
             contentDiv.innerHTML = content.replace(/\n/g, '<br>');
-        }
-        
-        // Se è un messaggio dell'assistente con informazioni sui corsi, aggiorna il preventivo
-        if (!content.includes('📤') && !content.includes('✅') && !content.includes('❌')) {
-            updatePreventive(content, false);
         }
     }
     
@@ -1020,7 +994,7 @@ function addStatusMessage(content) {
     return statusDiv;
 }
 
-// Funzione principale per inviare messaggi
+// FUNZIONE PRINCIPALE AGGIORNATA
 async function sendMessage() {
     const message = messageInput.value.trim();
     if (!message) return;
@@ -1036,6 +1010,7 @@ async function sendMessage() {
     try {
         await new Promise(resolve => setTimeout(resolve, 800));
         
+        // CHIAMATA API AGGIORNATA
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
             headers: {
@@ -1072,6 +1047,16 @@ async function sendMessage() {
         const processInfo = `Ho utilizzato ${totalChunks} chunks dal database per questa risposta.`;
         addMessage('assistant', data.message, processInfo);
 
+        // NUOVO: Aggiorna preventivo se presente
+        if (data.quote_info) {
+            updateQuoteFromBackend(data.quote_info);
+            
+            // Se il preventivo è stato aggiornato, mostra una notifica discreta
+            if (data.quote_updated) {
+                showSnackbar('💰 Preventivo aggiornato!', 2000);
+            }
+        }
+
     } catch (error) {
         console.error('Errore:', error);
         
@@ -1101,26 +1086,22 @@ async function sendMessage() {
 }
 
 // Pulisci chat e inizia nuova conversazione
-function clearChat() {
+async function clearChat() {
     chatContainer.innerHTML = '';
     sessionId = generateSessionId();
     localStorage.setItem('chatSessionId', sessionId);
     
-    // Reset anche il preventivo quando si pulisce la chat
-    preventiveData = {
-        school: null,
-        course: null,
-        duration: null,
-        startDate: null,
-        accommodation: null,
-        extras: [],
-        totalPrice: 0,
-        currency: '£',
-        reasoning: []
-    };
-    renderPreventive();
+    // NUOVO: Reset anche del preventivo via API
+    try {
+        await fetch(`${API_URL}/quote/${sessionId}`, { method: 'DELETE' });
+    } catch (error) {
+        console.log('Nessun preventivo da cancellare');
+    }
     
-    addMessage('assistant', '✨ **Nuova conversazione iniziata.** Come posso aiutarti?');
+    currentQuote = null;
+    renderEmptyQuote();
+    
+    addMessage('assistant', '✨ **Nuova conversazione iniziata.** Come posso aiutarti con i corsi di lingua?');
 }
 
 // Event listeners
@@ -1133,14 +1114,14 @@ messageInput.addEventListener('keypress', (e) => {
     }
 });
 
-// Messaggio di benvenuto all'avvio
+// MESSAGGIO DI BENVENUTO AGGIORNATO
 window.addEventListener('load', () => {
     if (typeof marked === 'undefined') {
         console.warn('⚠️ marked.js non è caricato. Il rendering del markdown non sarà disponibile.');
     }
     
     // Inizializza il preventivo vuoto
-    renderPreventive();
+    renderEmptyQuote();
     
     addMessage('assistant', 
         '# Ciao! 👋\n\n' +
@@ -1150,8 +1131,8 @@ window.addEventListener('load', () => {
         '• **Opzioni di alloggio**\n' +
         '• **Date e disponibilità**\n' +
         '• **Transfer aeroportuali**\n\n' +
-        '💡 **Mentre parliamo, compilerò un preventivo personalizzato** che vedrai sulla destra!\n\n' +
-        '*Cosa vorresti sapere?*'
+        '💡 **Mentre parliamo, compilerò automaticamente un preventivo personalizzato** che vedrai sulla destra!\n\n' +
+        '*Dimmi: che tipo di corso ti interessa?*'
     );
     
     if (API_URL === 'http://localhost:8000') {
