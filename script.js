@@ -124,9 +124,10 @@ function updateQuoteFromBackend(quoteInfo) {
         fase: quoteInfo.fase || 'esplorazione',
         stato: quoteInfo.stato || 'in_compilazione',
         costo_totale: quoteInfo.costo_totale || 0,
-        valuta: quoteInfo.valuta || 'GBP',
+        valuta: quoteInfo.valuta || 'EUR',
         aggiornato: quoteInfo.aggiornato,
         dettagli: { ...currentQuote.dettagli, ...quoteInfo.dettagli },
+        breakdown_costi: quoteInfo.breakdown_costi || {},  // AGGIUNTO
         prossimi_passi: quoteInfo.prossimi_passi || []
     };
     
@@ -141,7 +142,7 @@ function renderSimpleQuote() {
     
     let html = '';
     
-    // Informazioni base
+    // Informazioni base ricerca
     if (hasBaseInfo()) {
         html += '<div class="simple-section">';
         html += '<h3>📋 Ricerca</h3>';
@@ -153,20 +154,107 @@ function renderSimpleQuote() {
         html += '</div>';
     }
     
-    // Scuola selezionata
+    // Scuola selezionata con breakdown dettagliato
     if (hasConfirmedSelection()) {
         html += '<div class="simple-section confirmed">';
-        html += '<h3>✅ Scuola Selezionata</h3>';
+        html += '<h3>✅ Preventivo Dettagliato</h3>';
         const d = currentQuote.dettagli;
+        
+        // Info scuola
         html += '<div class="school-card">';
         html += `<div class="school-name">${d.scuola}</div>`;
-        if (d.corso_specifico) html += `<div class="course-name">${d.corso_specifico}</div>`;
-        if (d.prezzo_base) {
+        if (d.destinazione) {
+            html += `<div class="school-location">📍 ${d.destinazione}</div>`;
+        }
+        html += '</div>';
+        
+        // Breakdown dei costi
+        if (currentQuote.breakdown_costi && Object.keys(currentQuote.breakdown_costi).length > 0) {
+            html += '<div class="cost-breakdown">';
+            html += '<table class="breakdown-table">';
+            html += '<thead><tr><th>Voce</th><th>Dettagli</th><th>Importo</th></tr></thead>';
+            html += '<tbody>';
+            
+            const breakdown = currentQuote.breakdown_costi;
+            
+            // Corso
+            if (breakdown.corso) {
+                html += '<tr>';
+                html += `<td class="item-name">📚 Corso</td>`;
+                html += `<td class="item-details">${breakdown.corso.descrizione}`;
+                if (breakdown.corso.durata) {
+                    html += `<br><small class="duration">${breakdown.corso.durata}</small>`;
+                }
+                html += '</td>';
+                html += `<td class="item-price">${formatPrice(breakdown.corso.prezzo)}</td>`;
+                html += '</tr>';
+            }
+            
+            // Alloggio
+            if (breakdown.alloggio) {
+                html += '<tr>';
+                html += `<td class="item-name">🏠 Alloggio</td>`;
+                html += `<td class="item-details">${breakdown.alloggio.descrizione}`;
+                if (breakdown.alloggio.prezzo_settimanale) {
+                    html += `<br><small class="weekly-price">(${formatPrice(breakdown.alloggio.prezzo_settimanale)}/settimana)</small>`;
+                }
+                if (breakdown.alloggio.durata) {
+                    html += `<br><small class="duration">${breakdown.alloggio.durata}</small>`;
+                }
+                html += '</td>';
+                html += `<td class="item-price">${formatPrice(breakdown.alloggio.prezzo)}</td>`;
+                html += '</tr>';
+            }
+            
+            // Transfer
+            if (breakdown.transfer) {
+                html += '<tr>';
+                html += `<td class="item-name">✈️ Transfer</td>`;
+                html += `<td class="item-details">${breakdown.transfer.descrizione}</td>`;
+                html += `<td class="item-price">${formatPrice(breakdown.transfer.prezzo)}</td>`;
+                html += '</tr>';
+            }
+            
+            // Assicurazione
+            if (breakdown.assicurazione) {
+                html += '<tr>';
+                html += `<td class="item-name">🛡️ Assicurazione</td>`;
+                html += `<td class="item-details">${breakdown.assicurazione.descrizione}</td>`;
+                html += `<td class="item-price">${formatPrice(breakdown.assicurazione.prezzo)}</td>`;
+                html += '</tr>';
+            }
+            
+            // Altre spese
+            Object.keys(breakdown).forEach(key => {
+                if (key.startsWith('extra_')) {
+                    const item = breakdown[key];
+                    html += '<tr>';
+                    html += `<td class="item-name">➕ Extra</td>`;
+                    html += `<td class="item-details">${item.descrizione}</td>`;
+                    html += `<td class="item-price">${formatPrice(item.prezzo)}</td>`;
+                    html += '</tr>';
+                }
+            });
+            
+            html += '</tbody>';
+            html += '</table>';
+            html += '</div>';
+        } else if (d.prezzo_base) {
+            // Fallback per preventivi senza breakdown
             html += '<div class="base-price-display">';
+            html += `<span class="price-label">Prezzo corso:</span>`;
             html += `<span class="price-value">${formatPrice(d.prezzo_base)}</span>`;
             html += '</div>';
+            
+            if (d.tipo_alloggio && d.prezzo_alloggio_totale) {
+                html += '<div class="base-price-display">';
+                html += `<span class="price-label">${d.tipo_alloggio}:</span>`;
+                html += `<span class="price-value">${formatPrice(d.prezzo_alloggio_totale)}</span>`;
+                html += '</div>';
+            }
         }
-        html += '</div></div>';
+        
+        html += '</div>';
     }
     
     // Costo totale
@@ -174,6 +262,15 @@ function renderSimpleQuote() {
         html += '<div class="total-section">';
         html += '<h3>💰 Costo Totale</h3>';
         html += `<div class="total-display">${formatPrice(currentQuote.costo_totale)}</div>`;
+        if (currentQuote.dettagli.budget_max) {
+            const budget = currentQuote.dettagli.budget_max;
+            const diff = budget - currentQuote.costo_totale;
+            if (diff >= 0) {
+                html += `<div class="budget-status ok">✅ Entro il budget (risparmi ${formatPrice(Math.abs(diff))})</div>`;
+            } else {
+                html += `<div class="budget-status over">⚠️ Supera il budget di ${formatPrice(Math.abs(diff))}</div>`;
+            }
+        }
         html += '</div>';
     }
     
